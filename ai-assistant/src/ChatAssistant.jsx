@@ -87,7 +87,7 @@ export default function ChatAssistant() {
   const [dryRunStepChecks, setDryRunStepChecks] = useState({});
   const [dryRunComments, setDryRunComments] = useState('');
 
-  // Jira/Zephyr Export Modal State
+  // Jira Export Modal State
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Past User Stories (History Dashboard)
@@ -622,86 +622,6 @@ export default function ChatAssistant() {
     }
   };
 
-  const downloadZephyrCSV = () => {
-    if (testCases.length === 0) return;
-    
-    const escapeCsv = (str) => {
-      if (!str) return '""';
-      const clean = str.replace(/"/g, '""');
-      return `"${clean}"`;
-    };
-
-    const firstTc = testCases[0] || {};
-    const format = firstTc.format || 'Default';
-
-    let headers = [];
-    let rows = [];
-
-    if (format === 'LLY TU') {
-      headers = ['Test Case ID', 'Test Path', 'Type', 'Test Name', 'Designer', 'Category', 'Description', 'Step Name', 'Step Description', 'Expected Result', 'Evidence Required', 'Status'];
-      rows = testCases.map(tc => [
-        tc.customId || tc.id,
-        getCustomField(tc, 'testPath'),
-        tc.type,
-        tc.title,
-        getCustomField(tc, 'designer'),
-        getCustomField(tc, 'category'),
-        getCustomField(tc, 'description'),
-        getCustomField(tc, 'stepName'),
-        tc.steps,
-        tc.expectedResult,
-        getCustomField(tc, 'evidenceRequired'),
-        tc.executionStatus || 'Pending'
-      ]);
-    } else if (format === 'LLY PBPA') {
-      headers = ['Test Case ID', 'Test Summary', 'Test Case Description', 'Steps to be Followed', 'Expected Result', 'Actual Result', 'Status'];
-      rows = testCases.map(tc => [
-        tc.customId || tc.id,
-        tc.title,
-        getCustomField(tc, 'testCaseDescription'),
-        tc.steps,
-        tc.expectedResult,
-        getCustomField(tc, 'actualResult'),
-        tc.executionStatus || 'Pending'
-      ]);
-    } else if (format === 'DEL') {
-      headers = ['Test Case Id', 'Description', 'Test Data', 'Test Steps', 'Expected Result', 'Actual Result', 'Status', 'Bug ID'];
-      rows = testCases.map(tc => [
-        tc.customId || tc.id,
-        tc.title,
-        getCustomField(tc, 'testData'),
-        tc.steps,
-        tc.expectedResult,
-        getCustomField(tc, 'actualResult'),
-        tc.executionStatus || 'Pending',
-        getCustomField(tc, 'bugId' || '')
-      ]);
-    } else {
-      headers = ['Test Case ID', 'Title', 'Preconditions', 'Step', 'Expected Result', 'Priority', 'Type', 'Status', 'Execution Comments'];
-      rows = testCases.map(tc => [
-        tc.customId || tc.id,
-        tc.title,
-        tc.preconditions,
-        tc.steps,
-        tc.expectedResult,
-        tc.priority,
-        tc.type,
-        tc.executionStatus || 'Pending',
-        tc.executionComments || ''
-      ]);
-    }
-
-    const csvContent = [headers.join(','), ...rows.map(row => row.map(escapeCsv).join(','))].join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `QAtlas_TestCases_${activeStory?.id || 'export'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   // --- Settings Actions ---
   const handleSaveSettings = () => {
@@ -1182,7 +1102,7 @@ export default function ChatAssistant() {
                       📊 Export CSV
                     </button>
                     <button className="btn-secondary" onClick={() => setIsExportModalOpen(true)} style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
-                      💼 Jira/Zephyr Export
+                      💼 Jira Export
                     </button>
                     <button className="btn-primary" onClick={startDryRun} style={{ background: 'var(--primary)', boxShadow: '0 4px 12px var(--primary-glow)' }}>
                       ▶️ Start Dry-Run
@@ -2164,18 +2084,18 @@ export default function ChatAssistant() {
         </div>
       )}
 
-      {/* Jira/Zephyr Export Modal */}
+      {/* Jira Export Modal */}
       {isExportModalOpen && (
         <div className="modal-backdrop" style={{ zIndex: 1100 }}>
           <div className="modal-content" style={{ maxWidth: '700px', width: '90%' }}>
             <div className="modal-header">
-              <h3>Jira & Zephyr QA Exporter</h3>
+              <h3>Jira QA Exporter</h3>
               <button className="modal-close" onClick={() => setIsExportModalOpen(false)}>✕</button>
             </div>
             
             <div className="export-modal-tabs" style={{ padding: '10px 0' }}>
               <div className="export-info-text" style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '16px', lineHeight: '1.4' }}>
-                Generate formatted artifacts ready to copy directly into your Jira issue description, or download a CSV pre-structured for importing into Zephyr or Xray test management plugins.
+                Generate formatted artifacts ready to copy directly into your Jira issue description.
               </div>
               
               <div className="export-section" style={{ marginBottom: '20px' }}>
@@ -2196,16 +2116,6 @@ export default function ChatAssistant() {
                   value={getJiraMarkdown()}
                   style={{ width: '100%', height: '160px', fontFamily: 'monospace', fontSize: '11.5px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', color: 'var(--text-main)', resize: 'none' }}
                 />
-              </div>
-
-              <div className="export-section" style={{ padding: '14px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
-                <strong style={{ fontSize: '13.5px' }}>Zephyr / Xray CSV Exporter:</strong>
-                <p style={{ fontSize: '12px', color: 'var(--text-sub)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>
-                  Download the test suite mapped to Zephyr's column schema (Summary, Preconditions, Steps, Expected Result, Priority, Type, Status).
-                </p>
-                <button className="btn-primary" onClick={downloadZephyrCSV} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>
-                  📊 Download Zephyr CSV Template
-                </button>
               </div>
             </div>
             
