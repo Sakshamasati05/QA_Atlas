@@ -1018,8 +1018,8 @@ export default function ChatAssistant() {
                 <div className="chat-header">
                   <span>QAtlas Discussion Log</span>
                   <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>
-                    {(provider === 'claude' ? claudeKey : geminiKey) 
-                      ? `⚡ ${provider === 'claude' ? 'Claude' : 'Gemini'} Connected` 
+                    {(provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey) 
+                      ? `⚡ ${provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'copilot' ? 'Copilot' : 'Gemini'} Connected` 
                       : 'Mock offline mode'}
                   </span>
                 </div>
