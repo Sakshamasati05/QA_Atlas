@@ -919,6 +919,21 @@ export default function ChatAssistant() {
                   <span className="file-name" title={f.name} style={{ fontSize: '11px', fontWeight: '500' }}>📎 {f.name}</span>
                   <button className="file-remove-btn" onClick={() => removeFile(idx)} style={{ fontSize: '10px' }}>✕</button>
                 </div>
+                
+                <div style={{ display: 'flex', gap: '4px', flexDirection: 'column', margin: '2px 0' }}>
+                  <select
+                    className="sidebar-select"
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value)}
+                    style={{ padding: '4px 6px', fontSize: '11px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#fff', width: '100%', cursor: 'pointer', outline: 'none' }}
+                  >
+                    <option value="Default">Default format</option>
+                    <option value="LLY TU">LLY TU</option>
+                    <option value="LLY PBPA">LLY PBPA</option>
+                    <option value="DEL">DEL</option>
+                  </select>
+                </div>
+
                 <button 
                   className="settings-btn" 
                   onClick={() => handleGenerateFromDoc(f)} 
