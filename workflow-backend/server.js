@@ -209,7 +209,7 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
 });
 
 // --- HELPER: MOCK TEST CASES GENERATOR (FALLBACK) ---
-function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount) {
+function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
   const cleanStory = (userStory || '').toLowerCase();
   const cleanAc = (acceptanceCriteria || '').toLowerCase();
   const combinedText = cleanStory + ' ' + cleanAc;
@@ -405,7 +405,7 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
     pfIdx++;
   }
 
-  return testCases;
+  return testCases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
 }
 
 
@@ -444,6 +444,314 @@ async function getGeminiChatResponse(chatId, newContent, apiKey) {
 
   const resData = await response.json();
   return resData.candidates[0].content.parts[0].text;
+}
+
+// --- HELPER: OPENAI/CHATGPT CHAT COMPLETION ---
+async function getOpenAiChatResponse(chatId, newContent, apiKey) {
+  const previousMessages = await prisma.message.findMany({
+    where: { chatId },
+    orderBy: { timestamp: 'asc' }
+  });
+
+  const messages = previousMessages.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'assistant',
+    content: msg.content
+  }));
+
+  messages.push({
+    role: 'user',
+    content: newContent
+  });
+
+  if (!apiKey) {
+    return "I am the QAtlas AI Assistant. Please configure your OpenAI API Key in the settings panel to get real-time intelligent responses.\n\n*Note: Running in offline/mock mode.*";
+  }
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  return resData.choices[0].message.content;
+}
+
+// --- HELPER: OPENAI/CHATGPT TEST CASES GENERATOR ---
+async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: promptText }],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  const rawText = resData.choices[0].message.content;
+  
+  let jsonString = rawText.trim();
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+  }
+  
+  const parsed = JSON.parse(jsonString);
+  return parsed.testCases || [];
+}
+
+// --- HELPERS: CUSTOM FORMATS & PROMPT BUILDERS ---
+function getFormatInstructions(format) {
+  if (format === 'LLY TU') {
+    return `
+You MUST generate test cases exactly in the "LLY TU" format.
+Return a JSON object with this EXACT schema:
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "testPath": "string (logical folder path, e.g. /Login/Validation)",
+      "type": "string (Positive, Negative, Edge, Security, or Performance)",
+      "testName": "string (name of the test case)",
+      "designer": "string (designer name, e.g. QA Team)",
+      "category": "string (functional category, e.g. Authentication)",
+      "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
+      "stepName": "string (name of this test step, e.g. Input credentials)",
+      "stepDescription": "string (detailed step actions, e.g. 1. Type email\\n2. Type password)",
+      "expectedResult": "string (expected result)",
+      "evidenceRequired": "string (Yes or No)"
+    }
+  ]
+}
+`;
+  } else if (format === 'LLY PBPA') {
+    return `
+You MUST generate test cases exactly in the "LLY PBPA" format.
+Return a JSON object with this EXACT schema:
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "testSummary": "string (summary/title of the test)",
+      "type": "string (Positive, Negative, Edge, Security, or Performance)",
+      "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
+      "testCaseDescription": "string (detailed Test case description)",
+      "stepsToBeFollowed": "string (Steps to be followed)",
+      "expectedResult": "string (expected result)",
+      "actualResult": "string (leave blank or use N/A)"
+    }
+  ]
+}
+`;
+  } else if (format === 'DEL') {
+    return `
+You MUST generate test cases exactly in the "DEL" format.
+Return a JSON object with this EXACT schema:
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "description": "string (clear summary of what is tested)",
+      "type": "string (Positive, Negative, Edge, Security, or Performance)",
+      "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
+      "testData": "string (inputs or test data needed, e.g. Valid username/password)",
+      "testSteps": "string (Test Steps description)",
+      "expectedResult": "string (Expected Result)",
+      "actualResult": "string (leave blank or use N/A)",
+      "status": "string (default: Pending)",
+      "bugId": "string (leave blank or use N/A)"
+    }
+  ]
+}
+`;
+  } else {
+    return `
+You MUST generate test cases in the Default format.
+Return a JSON object with this EXACT schema:
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "title": "string (Test Case Title)",
+      "type": "string (Positive, Negative, Edge, Security, or Performance)",
+      "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
+      "steps": "string (step-by-step actions)",
+      "expectedResult": "string (Expected Result)",
+      "priority": "string (High, Medium, or Low)"
+    }
+  ]
+}
+`;
+  }
+}
+
+function buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format) {
+  const formatInst = getFormatInstructions(format);
+  return `
+You are an expert QA Automation Engineer.
+Generate QA test cases based on the following:
+
+**User Story / BRD Requirements:**
+${userStory}
+
+**Acceptance Criteria:**
+${acceptanceCriteria}
+
+**Required Test Cases to Generate:**
+${customizeVolume === false ? `
+Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, or redundant test cases.
+` : `
+- Generate ${positiveCount} Positive test cases (type: "Positive")
+- Generate ${negativeCount} Negative test cases (type: "Negative")
+- Generate ${edgeCount} Edge test cases (type: "Edge")
+- Generate ${securityCount} Security test cases (type: "Security")
+- Generate ${performanceCount} Performance test cases (type: "Performance")
+`}
+
+${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
+
+**CRITICAL QUALITY INSTRUCTIONS:**
+1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
+2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
+3. **Descriptive Titles:** Every test case title/description must be clear and descriptive of the exact condition. Do NOT use placeholder text or generic titles.
+4. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
+5. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+
+**Formatting Guidelines:**
+${formatInst}
+Return ONLY a valid JSON object matching the schema. Do not include markdown code block syntax (like \`\`\`json) or any conversational text.
+`;
+}
+
+function mapTestCaseToFormat(tc, format, index) {
+  const sequentialId = 'TC' + String(index + 1).padStart(3, '0');
+  if (format === 'LLY TU') {
+    return {
+      customId: tc.customId || sequentialId,
+      testPath: tc.testPath || '/DefaultPath/Section',
+      type: tc.type || 'Positive',
+      testName: tc.testName || tc.title || 'Generated Scenario',
+      designer: tc.designer || 'QA Team',
+      category: tc.category || 'General',
+      preconditions: tc.preconditions || 'N/A',
+      stepName: tc.stepName || 'Perform Action',
+      stepDescription: tc.stepDescription || tc.steps || '1. Action.',
+      expectedResult: tc.expectedResult || 'Expected Result.',
+      evidenceRequired: tc.evidenceRequired || 'No'
+    };
+  } else if (format === 'LLY PBPA') {
+    return {
+      customId: tc.customId || sequentialId,
+      testSummary: tc.testSummary || tc.title || 'Generated Scenario',
+      type: tc.type || 'Positive',
+      preconditions: tc.preconditions || 'N/A',
+      testCaseDescription: tc.testCaseDescription || tc.description || 'Verify function.',
+      stepsToBeFollowed: tc.stepsToBeFollowed || tc.steps || '1. Action.',
+      expectedResult: tc.expectedResult || 'Expected Result.',
+      actualResult: tc.actualResult || 'N/A'
+    };
+  } else if (format === 'DEL') {
+    return {
+      customId: tc.customId || sequentialId,
+      description: tc.description || tc.title || 'Generated Scenario',
+      type: tc.type || 'Positive',
+      preconditions: tc.preconditions || 'N/A',
+      testData: tc.testData || 'Valid credentials',
+      testSteps: tc.testSteps || tc.steps || '1. Action.',
+      expectedResult: tc.expectedResult || 'Expected Result.',
+      actualResult: tc.actualResult || 'N/A',
+      status: tc.status || 'Pending',
+      bugId: tc.bugId || 'N/A'
+    };
+  } else {
+    return {
+      ...tc,
+      customId: tc.customId || sequentialId
+    };
+  }
+}
+
+async function saveGeneratedTestCase(tc, storyId, format, index) {
+  const sequentialId = tc.customId || ('TC' + String(index + 1).padStart(3, '0'));
+  let title = tc.title || 'Generated Scenario';
+  let type = tc.type || 'Positive';
+  let preconditions = tc.preconditions || 'N/A';
+  let steps = tc.steps || '1. Action.';
+  let expectedResult = tc.expectedResult || 'Expected Result.';
+  let priority = tc.priority || 'Medium';
+  let customFieldsObj = {};
+
+  if (format === 'LLY TU') {
+    title = tc.testName || tc.title || 'Generated Scenario';
+    steps = tc.stepDescription || tc.steps || '1. Action.';
+    customFieldsObj = {
+      testPath: tc.testPath || 'N/A',
+      designer: tc.designer || 'QA Team',
+      category: tc.category || 'N/A',
+      description: tc.description || 'N/A',
+      stepName: tc.stepName || 'N/A',
+      evidenceRequired: tc.evidenceRequired || 'No'
+    };
+  } else if (format === 'LLY PBPA') {
+    title = tc.testSummary || tc.title || 'Generated Scenario';
+    steps = tc.stepsToBeFollowed || tc.steps || '1. Action.';
+    customFieldsObj = {
+      testCaseDescription: tc.testCaseDescription || tc.description || 'N/A',
+      actualResult: tc.actualResult || 'N/A'
+    };
+  } else if (format === 'DEL') {
+    title = tc.description || tc.title || 'Generated Scenario';
+    steps = tc.testSteps || tc.steps || '1. Action.';
+    customFieldsObj = {
+      testData: tc.testData || 'N/A',
+      actualResult: tc.actualResult || 'N/A',
+      bugId: tc.bugId || 'N/A'
+    };
+    if (tc.status) {
+      // Use status if present, otherwise default to Pending
+      priority = 'Medium';
+    }
+  }
+
+  return await prisma.testCase.create({
+    data: {
+      id: 'TC-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+      customId: sequentialId,
+      format: format,
+      title,
+      type,
+      preconditions,
+      steps,
+      expectedResult,
+      priority,
+      customFields: Object.keys(customFieldsObj).length > 0 ? JSON.stringify(customFieldsObj) : null,
+      userStoryId: storyId
+    }
+  });
 }
 
 // --- HELPER: CLAUDE CHAT COMPLETION ---
@@ -492,52 +800,8 @@ async function getClaudeChatResponse(chatId, newContent, apiKey) {
 }
 
 // --- HELPER: CLAUDE TEST CASES GENERATOR ---
-async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, apiKey) {
-  const promptText = `
-You are an expert QA Automation Engineer.
-Generate QA test cases based on the following:
-
-**User Story / BRD Requirements:**
-${userStory}
-
-**Acceptance Criteria:**
-${acceptanceCriteria}
-
-**Required Test Cases to Generate:**
-${customizeVolume === false ? `
-Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, or redundant test cases.
-` : `
-- Generate ${positiveCount} Positive test cases (type: "Positive")
-- Generate ${negativeCount} Negative test cases (type: "Negative")
-- Generate ${edgeCount} Edge test cases (type: "Edge")
-- Generate ${securityCount} Security test cases (type: "Security")
-- Generate ${performanceCount} Performance test cases (type: "Performance")
-`}
-
-${existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
-
-**CRITICAL QUALITY INSTRUCTIONS:**
-1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title must be clear and descriptive of the exact condition (e.g., "Verify clicking 'new' button displays a blank form with save options"). Do NOT use placeholder text or generic titles.
-4. **No Actual Result:** Do NOT include any "Actual Result" or "actualResult" field.
-5. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-
-**Formatting Guidelines:**
-- Return ONLY a valid JSON object matching this schema. Do not include markdown code block syntax (like \`\`\`json) or any conversational text:
-{
-  "testCases": [
-    {
-      "title": "string",
-      "type": "string",
-      "preconditions": "string",
-      "steps": "string",
-      "expectedResult": "string",
-      "priority": "string"
-    }
-  ]
-}
-`;
+async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
   const url = 'https://api.anthropic.com/v1/messages';
   const response = await fetch(url, {
@@ -695,7 +959,8 @@ app.post('/api/user-stories', async (req, res) => {
       performanceCount = 3,
       customizeVolume = true,
       userId = 'default-user',
-      chatId
+      chatId,
+      format = 'Default'
     } = req.body;
 
     if (!userStory && !acceptanceCriteria) {
@@ -751,9 +1016,12 @@ app.post('/api/user-stories', async (req, res) => {
       }
     }
 
-    // 2. Generate Test Cases using Gemini, Claude or Mock
+    // 2. Generate Test Cases using Gemini, Claude, ChatGPT or Mock
     const provider = req.headers['x-provider'] || 'gemini';
-    const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : process.env.GEMINI_API_KEY);
+    const apiKey = req.headers['x-api-key'] || 
+      (provider === 'claude' ? process.env.CLAUDE_API_KEY : 
+       provider === 'chatgpt' ? process.env.OPENAI_API_KEY : 
+       process.env.GEMINI_API_KEY);
     let generatedRaw = [];
 
     if (!apiKey) {
@@ -765,7 +1033,8 @@ app.post('/api/user-stories', async (req, res) => {
         negativeCount,
         edgeCount,
         securityCount,
-        performanceCount
+        performanceCount,
+        format
       );
     } else if (provider === 'claude') {
       try {
@@ -779,6 +1048,7 @@ app.post('/api/user-stories', async (req, res) => {
           performanceCount,
           existingTitles,
           customizeVolume,
+          format,
           apiKey
         );
       } catch (err) {
@@ -790,65 +1060,41 @@ app.post('/api/user-stories', async (req, res) => {
           negativeCount,
           edgeCount,
           securityCount,
-          performanceCount
+          performanceCount,
+          format
+        );
+      }
+    } else if (provider === 'chatgpt') {
+      try {
+        generatedRaw = await getOpenAiTestCases(
+          userStory,
+          acceptanceCriteria,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          existingTitles,
+          customizeVolume,
+          format,
+          apiKey
+        );
+      } catch (err) {
+        console.error('OpenAI API failed, falling back to mock:', err.message);
+        generatedRaw = generateMockTestCases(
+          userStory,
+          acceptanceCriteria,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          format
         );
       }
     } else {
       // Build prompt with context for Gemini
-      const promptText = `
-You are an expert QA Automation Engineer.
-Generate test cases based on the following information:
-
-**User Story:**
-${userStory}
-
-**Acceptance Criteria:**
-${acceptanceCriteria}
-
-**Required Test Cases to Generate:**
-${customizeVolume === false ? `
-Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, or redundant test cases.
-` : `
-- Generate ${positiveCount} Positive test cases (type: "Positive")
-- Generate ${negativeCount} Negative test cases (type: "Negative")
-- Generate ${edgeCount} Edge test cases (type: "Edge")
-- Generate ${securityCount} Security test cases (type: "Security")
-- Generate ${performanceCount} Performance test cases (type: "Performance")
-`}
-
-${existingTitles.length > 0 ? `**Existing Test Cases (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
-
-**CRITICAL QUALITY INSTRUCTIONS:**
-1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title must be clear and descriptive of the exact condition (e.g., "Verify clicking 'new' button displays a blank form with save options"). Do NOT use placeholder text or generic titles.
-4. **No Actual Result:** Do NOT include any "Actual Result" or "actualResult" field.
-5. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-
-**Formatting Guidelines:**
-- For each test case, provide:
-  1. "title": A clear, concise title describing what is being verified (e.g. "Verify login fails with invalid password")
-  2. "type": The test case type (must be one of: "Positive", "Negative", "Edge", "Security", "Performance")
-  3. "preconditions": Any pre-requisites required before executing the steps (Remember to start with the AC tag, e.g., "[AC1] Preconditions description")
-  4. "steps": Numbered, step-by-step actions (e.g. "1. Enter email\n2. Click send\n3. Check inbox")
-  5. "expectedResult": What the system should do if the steps are followed
-  6. "priority": "High", "Medium", or "Low"
-- Do NOT include any "Actual Result" or "actualResult" field.
-
-Response must be valid JSON matching this schema:
-{
-  "testCases": [
-    {
-      "title": "string",
-      "type": "string",
-      "preconditions": "string",
-      "steps": "string",
-      "expectedResult": "string",
-      "priority": "string"
-    }
-  ]
-}
-`;
+      const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -876,7 +1122,8 @@ Response must be valid JSON matching this schema:
             negativeCount,
             edgeCount,
             securityCount,
-            performanceCount
+            performanceCount,
+            format
           );
         }
       } catch (err) {
@@ -888,7 +1135,8 @@ Response must be valid JSON matching this schema:
           negativeCount,
           edgeCount,
           securityCount,
-          performanceCount
+          performanceCount,
+          format
         );
       }
     }
@@ -898,7 +1146,7 @@ Response must be valid JSON matching this schema:
     let duplicateCount = 0;
 
     for (const tc of generatedRaw) {
-      const cleanedTitle = (tc.title || '').toLowerCase().trim();
+      const cleanedTitle = (tc.title || tc.testName || tc.testSummary || tc.description || '').toLowerCase().trim();
       const isDuplicate = existingTitles.includes(cleanedTitle) || 
                           savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
       
@@ -907,18 +1155,8 @@ Response must be valid JSON matching this schema:
         continue;
       }
 
-      const newTc = await prisma.testCase.create({
-        data: {
-          id: 'TC-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
-          title: tc.title || 'Generated Test Case',
-          type: tc.type || 'Positive',
-          preconditions: tc.preconditions || 'N/A',
-          steps: tc.steps || '1. Perform action.',
-          expectedResult: tc.expectedResult || 'Expected outcome happens.',
-          priority: tc.priority || 'Medium',
-          userStoryId: storyId
-        }
-      });
+      const idx = existingTitles.length + savedTestCases.length;
+      const newTc = await saveGeneratedTestCase(tc, storyId, format, idx);
       savedTestCases.push(newTc);
     }
 
@@ -989,9 +1227,9 @@ Response must be valid JSON matching this schema:
   }
 });
 
-// --- HELPERS: GENERATION FROM DOCUMENTS ---
-async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, apiKey) {
-  const promptText = `
+function buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format) {
+  const formatInst = getFormatInstructions(format);
+  return `
 Analyze this requirement/specification document:
 --- Document Name: ${documentName} ---
 ${documentText.substring(0, 10000)}
@@ -1006,26 +1244,58 @@ ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Databa
 **CRITICAL QUALITY INSTRUCTIONS:**
 1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
 2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title must be clear and descriptive of the exact condition (e.g., "Verify clicking 'new' button displays a blank form with save options"). Do NOT use placeholder text or generic titles.
-4. **No Actual Result:** Do NOT include any "Actual Result" or "actualResult" field.
-5. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
+3. **Descriptive Titles:** Every test case title/description must be clear and descriptive of the exact condition. Do NOT use placeholder text or generic titles.
+4. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
+5. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
-Response must be valid JSON matching this schema. Do not include markdown code block syntax (like \`\`\`json) or any conversational text:
+Response must be valid JSON matching this schema:
 {
   "userStory": "string",
   "acceptanceCriteria": "string",
   "testCases": [
-    {
-      "title": "string",
-      "type": "string",
-      "preconditions": "string",
-      "steps": "string",
-      "expectedResult": "string",
-      "priority": "string"
-    }
+    // List generated test case objects conforming to format schema below:
+    // ${formatInst.trim().replace(/\n/g, '\n    // ')}
   ]
 }
 `;
+}
+
+async function getOpenAiTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: promptText }],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  const rawText = resData.choices[0].message.content;
+  
+  let jsonString = rawText.trim();
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+  }
+  
+  return JSON.parse(jsonString);
+}
+
+// --- HELPERS: GENERATION FROM DOCUMENTS ---
+async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
   const url = 'https://api.anthropic.com/v1/messages';
   const response = await fetch(url, {
@@ -1058,42 +1328,8 @@ Response must be valid JSON matching this schema. Do not include markdown code b
   return JSON.parse(jsonString);
 }
 
-async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, apiKey) {
-  const promptText = `
-Analyze this requirement/specification document:
---- Document Name: ${documentName} ---
-${documentText.substring(0, 10000)}
-
-Tasks:
-1. Extract a clear, concise User Story summarizing the primary features described in the document (format as: "As a..., I want to..., so that...").
-2. Extract the Acceptance Criteria (list at least 3-5 criteria, newline separated).
-3. ${customizeVolume === false ? `Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the requirements. Do NOT generate unnecessary, generic, or redundant test cases.` : `Generate ${positiveCount} Positive, ${negativeCount} Negative, ${edgeCount} Edge, ${securityCount} Security, and ${performanceCount} Performance test cases.`}
-
-${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
-
-**CRITICAL QUALITY INSTRUCTIONS:**
-1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title must be clear and descriptive of the exact condition (e.g., "Verify clicking 'new' button displays a blank form with save options"). Do NOT use placeholder text or generic titles.
-4. **No Actual Result:** Do NOT include any "Actual Result" or "actualResult" field.
-5. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-
-Response must be valid JSON matching this schema:
-{
-  "userStory": "string",
-  "acceptanceCriteria": "string",
-  "testCases": [
-    {
-      "title": "string",
-      "type": "string",
-      "preconditions": "string",
-      "steps": "string",
-      "expectedResult": "string",
-      "priority": "string"
-    }
-  ]
-}
-`;
+async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
@@ -1115,7 +1351,7 @@ Response must be valid JSON matching this schema:
   return JSON.parse(rawJsonText);
 }
 
-function generateMockTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount) {
+function generateMockTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
   const words = documentText.replace(/[^\w\s]/g, '').split(/\s+/).slice(0, 15).join(' ');
   const userStory = `As a QAtlas analyst, I want to execute business features from "${documentName}" so that we verify system specs: ${words}...`;
   const acceptanceCriteria = `AC1: The system must enforce validation rules in ${documentName}.\nAC2: Navigation and actions defined in ${documentName} must respond correctly.`;
@@ -1127,7 +1363,8 @@ function generateMockTestCasesFromDoc(documentName, documentText, positiveCount,
     negativeCount,
     edgeCount,
     securityCount,
-    performanceCount
+    performanceCount,
+    format
   );
   
   return {
@@ -1150,7 +1387,8 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
       performanceCount = 2,
       customizeVolume = true,
       userId = 'default-user',
-      chatId
+      chatId,
+      format = 'Default'
     } = req.body;
 
     if (!documentText) {
@@ -1182,7 +1420,10 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     }
 
     const provider = req.headers['x-provider'] || 'gemini';
-    const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : process.env.GEMINI_API_KEY);
+    const apiKey = req.headers['x-api-key'] || 
+      (provider === 'claude' ? process.env.CLAUDE_API_KEY : 
+       provider === 'chatgpt' ? process.env.OPENAI_API_KEY : 
+       process.env.GEMINI_API_KEY);
 
     let result;
     if (!apiKey) {
@@ -1194,7 +1435,8 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         negativeCount,
         edgeCount,
         securityCount,
-        performanceCount
+        performanceCount,
+        format
       );
     } else if (provider === 'claude') {
       try {
@@ -1208,6 +1450,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
           performanceCount,
           existingTitles,
           customizeVolume,
+          format,
           apiKey
         );
       } catch (err) {
@@ -1219,7 +1462,36 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
           negativeCount,
           edgeCount,
           securityCount,
-          performanceCount
+          performanceCount,
+          format
+        );
+      }
+    } else if (provider === 'chatgpt') {
+      try {
+        result = await getOpenAiTestCasesFromDoc(
+          documentName,
+          documentText,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          existingTitles,
+          customizeVolume,
+          format,
+          apiKey
+        );
+      } catch (err) {
+        console.error('OpenAI API generate-from-doc error, falling back to mock:', err.message);
+        result = generateMockTestCasesFromDoc(
+          documentName,
+          documentText,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          format
         );
       }
     } else {
@@ -1234,6 +1506,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
           performanceCount,
           existingTitles,
           customizeVolume,
+          format,
           apiKey
         );
       } catch (err) {
@@ -1245,7 +1518,8 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
           negativeCount,
           edgeCount,
           securityCount,
-          performanceCount
+          performanceCount,
+          format
         );
       }
     }
@@ -1287,7 +1561,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     let duplicateCount = 0;
 
     for (const tc of parsedTestCases) {
-      const cleanedTitle = (tc.title || '').toLowerCase().trim();
+      const cleanedTitle = (tc.title || tc.testName || tc.testSummary || tc.description || '').toLowerCase().trim();
       const isDuplicate = existingTitles.includes(cleanedTitle) || 
                           savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
       
@@ -1296,18 +1570,8 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         continue;
       }
 
-      const newTc = await prisma.testCase.create({
-        data: {
-          id: 'TC-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
-          title: tc.title || 'Generated Scenario',
-          type: tc.type || 'Positive',
-          preconditions: tc.preconditions || 'N/A',
-          steps: tc.steps || '1. Observe layout.',
-          expectedResult: tc.expectedResult || 'System works.',
-          priority: tc.priority || 'Medium',
-          userStoryId: finalStoryId
-        }
-      });
+      const idx = existingTitles.length + savedTestCases.length;
+      const newTc = await saveGeneratedTestCase(tc, finalStoryId, format, idx);
       savedTestCases.push(newTc);
     }
 
@@ -1405,10 +1669,28 @@ app.get('/api/user-stories/:id/test-cases', async (req, res) => {
 app.put('/api/test-cases/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, type, preconditions, steps, expectedResult, priority, executionStatus, executionComments } = req.body;
+    const { title, type, preconditions, steps, expectedResult, priority, executionStatus, executionComments, customId, format, customFields } = req.body;
+    
+    let dbCustomFields = customFields;
+    if (customFields && typeof customFields === 'object') {
+      dbCustomFields = JSON.stringify(customFields);
+    }
+
     const updated = await prisma.testCase.update({
       where: { id },
-      data: { title, type, preconditions, steps, expectedResult, priority, executionStatus, executionComments }
+      data: { 
+        title, 
+        type, 
+        preconditions, 
+        steps, 
+        expectedResult, 
+        priority, 
+        executionStatus, 
+        executionComments,
+        customId,
+        format,
+        customFields: dbCustomFields
+      }
     });
     res.json(updated);
   } catch (error) {

@@ -93,6 +93,8 @@ model AcceptanceCriterion {
 
 model TestCase {
   id                String    @id
+  customId          String?   // Sequential ID like TC001, TC002
+  format            String    @default("Default") // "Default", "LLY TU", "LLY PBPA", "DEL"
   title             String
   type              String    // "Positive", "Negative", "Edge", "Security", etc.
   preconditions     String?
@@ -101,6 +103,7 @@ model TestCase {
   priority          String    @default("Medium")
   executionStatus   String    @default("Pending")
   executionComments String?
+  customFields      String?   // JSON-serialized string of custom fields
   userStoryId       String
   userStory         UserStory @relation(fields: [userStoryId], references: [id], onDelete: Cascade)
 }

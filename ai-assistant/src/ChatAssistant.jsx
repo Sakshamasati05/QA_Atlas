@@ -13,16 +13,42 @@ export default function ChatAssistant() {
   const [provider, setProvider] = useState(() => localStorage.getItem('qatlas_provider') || 'gemini');
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('qatlas_geminiKey') || '');
   const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem('qatlas_claudeKey') || '');
+  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('qatlas_openaiKey') || '');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
   const [tempGeminiKey, setTempGeminiKey] = useState(geminiKey);
   const [tempClaudeKey, setTempClaudeKey] = useState(claudeKey);
+  const [tempOpenaiKey, setTempOpenaiKey] = useState(openaiKey);
   const [theme, setTheme] = useState(() => localStorage.getItem('qatlas_theme') || 'light');
 
   // QAtlas Generator Input Form
   const [userStory, setUserStory] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
+  const [format, setFormat] = useState('Default');
+
+  const getCustomField = (tc, fieldName) => {
+    if (!tc || !tc.customFields) return '';
+    try {
+      const parsed = typeof tc.customFields === 'string' ? JSON.parse(tc.customFields) : tc.customFields;
+      return parsed[fieldName] || '';
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const updateCustomField = (fieldName, value) => {
+    const currentFields = typeof editingTcData.customFields === 'string'
+      ? JSON.parse(editingTcData.customFields || '{}')
+      : (editingTcData.customFields || {});
+    setEditingTcData({
+      ...editingTcData,
+      customFields: {
+        ...currentFields,
+        [fieldName]: value
+      }
+    });
+  };
   const [positiveCount, setPositiveCount] = useState(3);
   const [negativeCount, setNegativeCount] = useState(3);
   const [edgeCount, setEdgeCount] = useState(3);
@@ -183,7 +209,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -203,7 +229,8 @@ export default function ChatAssistant() {
           performanceCount,
           customizeVolume,
           userId,
-          chatId: currentChatId
+          chatId: currentChatId,
+          format
         })
       });
 
@@ -262,7 +289,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -282,7 +309,8 @@ export default function ChatAssistant() {
           performanceCount,
           customizeVolume,
           userId,
-          chatId: currentChatId
+          chatId: currentChatId,
+          format
         })
       });
 
@@ -342,7 +370,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -533,22 +561,69 @@ export default function ChatAssistant() {
   };
 
   const getJiraMarkdown = () => {
-    let md = `||Test Case ID||Type||Title||Preconditions||Steps||Expected Result||Priority||Status||\n`;
-    testCases.forEach(tc => {
-      const preconditions = tc.preconditions || 'N/A';
-      const steps = (tc.steps || '').replace(/\n/g, '\\\\ ');
-      const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
-      const status = tc.executionStatus || 'Pending';
-      md += `|${tc.id}|${tc.type}|${tc.title}|${preconditions}|${steps}|${expected}|${tc.priority}|${status}|\n`;
-    });
-    return md;
+    const firstTc = testCases[0] || {};
+    const format = firstTc.format || 'Default';
+
+    if (format === 'LLY TU') {
+      let md = `||Test Case ID||Test Path||Type||Test Name||Designer||Category||Description||Step Name||Step Description||Expected Result||Evidence Required||Status||\n`;
+      testCases.forEach(tc => {
+        const id = tc.customId || tc.id;
+        const path = getCustomField(tc, 'testPath');
+        const type = tc.type || 'Positive';
+        const name = tc.title || 'Generated Scenario';
+        const designer = getCustomField(tc, 'designer');
+        const cat = getCustomField(tc, 'category');
+        const desc = getCustomField(tc, 'description');
+        const sName = getCustomField(tc, 'stepName');
+        const sDesc = (tc.steps || '').replace(/\n/g, '\\\\ ');
+        const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
+        const evidence = getCustomField(tc, 'evidenceRequired');
+        const status = tc.executionStatus || 'Pending';
+        md += `|${id}|${path}|${type}|${name}|${designer}|${cat}|${desc}|${sName}|${sDesc}|${expected}|${evidence}|${status}|\n`;
+      });
+      return md;
+    } else if (format === 'LLY PBPA') {
+      let md = `||Test Case ID||Test Summary||Test Case Description||Steps to be Followed||Expected Result||Actual Result||Status||\n`;
+      testCases.forEach(tc => {
+        const id = tc.customId || tc.id;
+        const summary = tc.title || 'Generated Scenario';
+        const desc = getCustomField(tc, 'testCaseDescription');
+        const steps = (tc.steps || '').replace(/\n/g, '\\\\ ');
+        const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
+        const actual = getCustomField(tc, 'actualResult');
+        const status = tc.executionStatus || 'Pending';
+        md += `|${id}|${summary}|${desc}|${steps}|${expected}|${actual}|${status}|\n`;
+      });
+      return md;
+    } else if (format === 'DEL') {
+      let md = `||Test Case Id||Description||Test Data||Test Steps||Expected Result||Actual Result||Status||Bug ID||\n`;
+      testCases.forEach(tc => {
+        const id = tc.customId || tc.id;
+        const desc = tc.title || 'Generated Scenario';
+        const data = getCustomField(tc, 'testData');
+        const steps = (tc.steps || '').replace(/\n/g, '\\\\ ');
+        const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
+        const actual = getCustomField(tc, 'actualResult');
+        const status = tc.executionStatus || 'Pending';
+        const bug = getCustomField(tc, 'bugId');
+        md += `|${id}|${desc}|${data}|${steps}|${expected}|${actual}|${status}|${bug}|\n`;
+      });
+      return md;
+    } else {
+      let md = `||Test Case ID||Type||Title||Preconditions||Steps||Expected Result||Priority||Status||\n`;
+      testCases.forEach(tc => {
+        const preconditions = tc.preconditions || 'N/A';
+        const steps = (tc.steps || '').replace(/\n/g, '\\\\ ');
+        const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
+        const status = tc.executionStatus || 'Pending';
+        md += `|${tc.customId || tc.id}|${tc.type}|${tc.title}|${preconditions}|${steps}|${expected}|${tc.priority}|${status}|\n`;
+      });
+      return md;
+    }
   };
 
   const downloadZephyrCSV = () => {
     if (testCases.length === 0) return;
-    
-    // Headers matching standard Zephyr columns
-    const headers = ['Test Summary', 'Preconditions', 'Step', 'Expected Result', 'Priority', 'Type', 'Status', 'Execution Comments'];
     
     const escapeCsv = (str) => {
       if (!str) return '""';
@@ -556,24 +631,73 @@ export default function ChatAssistant() {
       return `"${clean}"`;
     };
 
-    const rows = testCases.map(tc => [
-      escapeCsv(tc.title),
-      escapeCsv(tc.preconditions),
-      escapeCsv(tc.steps),
-      escapeCsv(tc.expectedResult),
-      escapeCsv(tc.priority),
-      escapeCsv(tc.type),
-      escapeCsv(tc.executionStatus || 'Pending'),
-      escapeCsv(tc.executionComments || '')
-    ]);
+    const firstTc = testCases[0] || {};
+    const format = firstTc.format || 'Default';
 
-    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    let headers = [];
+    let rows = [];
+
+    if (format === 'LLY TU') {
+      headers = ['Test Case ID', 'Test Path', 'Type', 'Test Name', 'Designer', 'Category', 'Description', 'Step Name', 'Step Description', 'Expected Result', 'Evidence Required', 'Status'];
+      rows = testCases.map(tc => [
+        tc.customId || tc.id,
+        getCustomField(tc, 'testPath'),
+        tc.type,
+        tc.title,
+        getCustomField(tc, 'designer'),
+        getCustomField(tc, 'category'),
+        getCustomField(tc, 'description'),
+        getCustomField(tc, 'stepName'),
+        tc.steps,
+        tc.expectedResult,
+        getCustomField(tc, 'evidenceRequired'),
+        tc.executionStatus || 'Pending'
+      ]);
+    } else if (format === 'LLY PBPA') {
+      headers = ['Test Case ID', 'Test Summary', 'Test Case Description', 'Steps to be Followed', 'Expected Result', 'Actual Result', 'Status'];
+      rows = testCases.map(tc => [
+        tc.customId || tc.id,
+        tc.title,
+        getCustomField(tc, 'testCaseDescription'),
+        tc.steps,
+        tc.expectedResult,
+        getCustomField(tc, 'actualResult'),
+        tc.executionStatus || 'Pending'
+      ]);
+    } else if (format === 'DEL') {
+      headers = ['Test Case Id', 'Description', 'Test Data', 'Test Steps', 'Expected Result', 'Actual Result', 'Status', 'Bug ID'];
+      rows = testCases.map(tc => [
+        tc.customId || tc.id,
+        tc.title,
+        getCustomField(tc, 'testData'),
+        tc.steps,
+        tc.expectedResult,
+        getCustomField(tc, 'actualResult'),
+        tc.executionStatus || 'Pending',
+        getCustomField(tc, 'bugId' || '')
+      ]);
+    } else {
+      headers = ['Test Case ID', 'Title', 'Preconditions', 'Step', 'Expected Result', 'Priority', 'Type', 'Status', 'Execution Comments'];
+      rows = testCases.map(tc => [
+        tc.customId || tc.id,
+        tc.title,
+        tc.preconditions,
+        tc.steps,
+        tc.expectedResult,
+        tc.priority,
+        tc.type,
+        tc.executionStatus || 'Pending',
+        tc.executionComments || ''
+      ]);
+    }
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.map(escapeCsv).join(','))].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Zephyr_TestCases_${activeStory?.id || 'export'}.csv`);
+    link.setAttribute("download", `QAtlas_TestCases_${activeStory?.id || 'export'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -585,10 +709,12 @@ export default function ChatAssistant() {
     setProvider(tempProvider);
     setGeminiKey(tempGeminiKey);
     setClaudeKey(tempClaudeKey);
+    setOpenaiKey(tempOpenaiKey);
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
     localStorage.setItem('qatlas_geminiKey', tempGeminiKey);
     localStorage.setItem('qatlas_claudeKey', tempClaudeKey);
+    localStorage.setItem('qatlas_openaiKey', tempOpenaiKey);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -833,6 +959,7 @@ export default function ChatAssistant() {
             setTempProvider(provider);
             setTempGeminiKey(geminiKey);
             setTempClaudeKey(claudeKey);
+            setTempOpenaiKey(openaiKey);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -892,6 +1019,21 @@ export default function ChatAssistant() {
                     value={acceptanceCriteria}
                     onChange={(e) => setAcceptanceCriteria(e.target.value)}
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>Test Case Format</label>
+                  <select
+                    className="sidebar-select"
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value)}
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '13px' }}
+                  >
+                    <option value="Default">Default format</option>
+                    <option value="LLY TU">LLY TU</option>
+                    <option value="LLY PBPA">LLY PBPA</option>
+                    <option value="DEL">DEL</option>
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -1078,31 +1220,218 @@ export default function ChatAssistant() {
                             <option value="Low">Low</option>
                           </select>
                         </div>
-                        <div className="detail-row">
-                          <label className="detail-label">Preconditions</label>
-                          <input
-                            type="text"
-                            className="tc-edit-input"
-                            value={editingTcData.preconditions}
-                            onChange={(e) => setEditingTcData({ ...editingTcData, preconditions: e.target.value })}
-                          />
-                        </div>
-                        <div className="detail-row">
-                          <label className="detail-label">Steps</label>
-                          <textarea
-                            className="tc-edit-textarea"
-                            value={editingTcData.steps}
-                            onChange={(e) => setEditingTcData({ ...editingTcData, steps: e.target.value })}
-                          />
-                        </div>
-                        <div className="detail-row">
-                          <label className="detail-label">Expected Result</label>
-                          <textarea
-                            className="tc-edit-textarea"
-                            value={editingTcData.expectedResult}
-                            onChange={(e) => setEditingTcData({ ...editingTcData, expectedResult: e.target.value })}
-                          />
-                        </div>
+                        {editingTcData.format === 'LLY TU' ? (
+                          <>
+                            <div className="detail-row">
+                              <label className="detail-label">Test Path</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'testPath')}
+                                onChange={(e) => updateCustomField('testPath', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Designer</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'designer')}
+                                onChange={(e) => updateCustomField('designer', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Category</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'category')}
+                                onChange={(e) => updateCustomField('category', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Description</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'description')}
+                                onChange={(e) => updateCustomField('description', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Preconditions</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={editingTcData.preconditions}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, preconditions: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Step Name</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'stepName')}
+                                onChange={(e) => updateCustomField('stepName', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Step Description</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.steps}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, steps: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Expected Result</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.expectedResult}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, expectedResult: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Evidence Required</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'evidenceRequired')}
+                                onChange={(e) => updateCustomField('evidenceRequired', e.target.value)}
+                              />
+                            </div>
+                          </>
+                        ) : editingTcData.format === 'LLY PBPA' ? (
+                          <>
+                            <div className="detail-row">
+                              <label className="detail-label">Test Case Description</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'testCaseDescription')}
+                                onChange={(e) => updateCustomField('testCaseDescription', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Preconditions</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={editingTcData.preconditions}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, preconditions: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Steps to be Followed</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.steps}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, steps: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Expected Result</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.expectedResult}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, expectedResult: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Actual Result</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'actualResult')}
+                                onChange={(e) => updateCustomField('actualResult', e.target.value)}
+                              />
+                            </div>
+                          </>
+                        ) : editingTcData.format === 'DEL' ? (
+                          <>
+                            <div className="detail-row">
+                              <label className="detail-label">Preconditions</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={editingTcData.preconditions}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, preconditions: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Test Data</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'testData')}
+                                onChange={(e) => updateCustomField('testData', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Test Steps</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.steps}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, steps: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Expected Result</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.expectedResult}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, expectedResult: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Actual Result</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'actualResult')}
+                                onChange={(e) => updateCustomField('actualResult', e.target.value)}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Bug ID</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'bugId')}
+                                onChange={(e) => updateCustomField('bugId', e.target.value)}
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="detail-row">
+                              <label className="detail-label">Preconditions</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={editingTcData.preconditions}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, preconditions: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Steps</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.steps}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, steps: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-row">
+                              <label className="detail-label">Expected Result</label>
+                              <textarea
+                                className="tc-edit-textarea"
+                                value={editingTcData.expectedResult}
+                                onChange={(e) => setEditingTcData({ ...editingTcData, expectedResult: e.target.value })}
+                              />
+                            </div>
+                          </>
+                        )}
                         <div className="tc-card-actions">
                           <button className="btn-primary" onClick={handleEditSave} style={{ padding: '6px 14px', borderRadius: '6px' }}>
                             Save
@@ -1117,7 +1446,7 @@ export default function ChatAssistant() {
                       <>
                         <div className="tc-card-header">
                           <div className="tc-title-flex">
-                            <span className="tc-id-badge">{tc.id}</span>
+                            <span className="tc-id-badge">{tc.customId || tc.id}</span>
                             <span className="tc-title">{tc.title}</span>
                           </div>
                           <div className="tc-badges">
@@ -1151,20 +1480,121 @@ export default function ChatAssistant() {
                           </div>
                         ) : (
                           <div className="tc-details">
-                            {tc.preconditions && tc.preconditions !== 'N/A' && (
-                              <div className="detail-row">
-                                <span className="detail-label">Preconditions</span>
-                                <span className="detail-value">{tc.preconditions}</span>
-                              </div>
+                            {tc.format === 'LLY TU' ? (
+                              <>
+                                <div className="detail-row">
+                                  <span className="detail-label">Test Path</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testPath')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Designer</span>
+                                  <span className="detail-value">{getCustomField(tc, 'designer')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Category</span>
+                                  <span className="detail-value">{getCustomField(tc, 'category')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Description</span>
+                                  <span className="detail-value">{getCustomField(tc, 'description')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Preconditions</span>
+                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Step Name</span>
+                                  <span className="detail-value">{getCustomField(tc, 'stepName')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Step Description</span>
+                                  <span className="detail-value">{tc.steps}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Expected Result</span>
+                                  <span className="detail-value">{tc.expectedResult}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Evidence Required</span>
+                                  <span className="detail-value">{getCustomField(tc, 'evidenceRequired')}</span>
+                                </div>
+                              </>
+                            ) : tc.format === 'LLY PBPA' ? (
+                              <>
+                                <div className="detail-row">
+                                  <span className="detail-label">Test Summary</span>
+                                  <span className="detail-value">{tc.title}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Test Case Description</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testCaseDescription')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Preconditions</span>
+                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Steps to be Followed</span>
+                                  <span className="detail-value">{tc.steps}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Expected Result</span>
+                                  <span className="detail-value">{tc.expectedResult}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Actual Result</span>
+                                  <span className="detail-value">{getCustomField(tc, 'actualResult')}</span>
+                                </div>
+                              </>
+                            ) : tc.format === 'DEL' ? (
+                              <>
+                                <div className="detail-row">
+                                  <span className="detail-label">Description</span>
+                                  <span className="detail-value">{tc.title}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Preconditions</span>
+                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Test Data</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testData')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Test Steps</span>
+                                  <span className="detail-value">{tc.steps}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Expected Result</span>
+                                  <span className="detail-value">{tc.expectedResult}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Actual Result</span>
+                                  <span className="detail-value">{getCustomField(tc, 'actualResult')}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Bug ID</span>
+                                  <span className="detail-value">{getCustomField(tc, 'bugId')}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {tc.preconditions && tc.preconditions !== 'N/A' && (
+                                  <div className="detail-row">
+                                    <span className="detail-label">Preconditions</span>
+                                    <span className="detail-value">{tc.preconditions}</span>
+                                  </div>
+                                )}
+                                <div className="detail-row">
+                                  <span className="detail-label">Steps</span>
+                                  <span className="detail-value">{tc.steps}</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="detail-label">Expected Result</span>
+                                  <span className="detail-value">{tc.expectedResult}</span>
+                                </div>
+                              </>
                             )}
-                            <div className="detail-row">
-                              <span className="detail-label">Steps</span>
-                              <span className="detail-value">{tc.steps}</span>
-                            </div>
-                            <div className="detail-row">
-                              <span className="detail-label">Expected Result</span>
-                              <span className="detail-value">{tc.expectedResult}</span>
-                            </div>
                             {tc.executionComments && (
                               <div className="detail-row execution-notes-row" style={{ marginTop: '8px', padding: '6px 8px', background: 'var(--bg-glass-hover)', borderLeft: '3px solid var(--text-muted)', borderRadius: '0 4px 4px 0' }}>
                                 <span className="detail-label" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Execution Run Comments</span>
@@ -1534,6 +1964,7 @@ export default function ChatAssistant() {
               >
                 <option value="gemini">Google Gemini 1.5 Flash</option>
                 <option value="claude">Anthropic Claude 3.5 Sonnet</option>
+                <option value="chatgpt">ChatGPT (gpt-4o-mini)</option>
               </select>
             </div>
 
@@ -1556,6 +1987,17 @@ export default function ChatAssistant() {
                 value={tempClaudeKey}
                 onChange={(e) => setTempClaudeKey(e.target.value)}
                 placeholder={claudeKey ? "••••••••••••••••" : "Paste Claude API Key here..."}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>OpenAI/ChatGPT API Key</label>
+              <input
+                type="password"
+                className="sidebar-input"
+                value={tempOpenaiKey}
+                onChange={(e) => setTempOpenaiKey(e.target.value)}
+                placeholder={openaiKey ? "••••••••••••••••" : "Paste OpenAI API Key here..."}
               />
               <span className="upload-hint" style={{ marginTop: '2px' }}>
                 Keys are saved locally in your browser. If a key is missing for your selected provider, QAtlas falls back to the advanced heuristic mock generator.
