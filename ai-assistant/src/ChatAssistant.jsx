@@ -925,12 +925,12 @@ export default function ChatAssistant() {
                     className="sidebar-select"
                     value={format}
                     onChange={(e) => setFormat(e.target.value)}
-                    style={{ padding: '4px 6px', fontSize: '11px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#fff', width: '100%', cursor: 'pointer', outline: 'none' }}
+                    style={{ padding: '4px 6px', fontSize: '11px', background: '#ffffff', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#000000', width: '100%', cursor: 'pointer', outline: 'none' }}
                   >
-                    <option value="Default">Default format</option>
-                    <option value="LLY TU">LLY TU</option>
-                    <option value="LLY PBPA">LLY PBPA</option>
-                    <option value="DEL">DEL</option>
+                    <option value="Default" style={{ color: '#000000', background: '#ffffff' }}>Default format</option>
+                    <option value="LLY TU" style={{ color: '#000000', background: '#ffffff' }}>LLY TU</option>
+                    <option value="LLY PBPA" style={{ color: '#000000', background: '#ffffff' }}>LLY PBPA</option>
+                    <option value="DEL" style={{ color: '#000000', background: '#ffffff' }}>DEL</option>
                   </select>
                 </div>
 
