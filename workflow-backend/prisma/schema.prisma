@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Workorder {
+  id                  String     @id
+  name                String
+  description         String?
+  status              String     @default("Draft")
+  createdBy           String
+  createdAt           String
+  rejectionComment    String?
+  cancellationComment String?
+  groups              Group[]
+  auditTrail          AuditLog[]
+}
+
+model Group {
+  id          String    @id
+  name        String
+  workorderId String
+  workorder   Workorder @relation(fields: [workorderId], references: [id], onDelete: Cascade)
+  items       Item[]
+}
+
+model Item {
+  id              String  @id
+  name            String
+  category        String  @default("General")
+  type            String
+  options         String? // Stored as a JSON string array
+  lowerLimit      Float?
+  upperLimit      Float?
+  status          String  @default("Pending")
+  value           String?
+  executionStatus String  @default("Pending")
+  undoneComment   String?
+  groupId         String
+  group           Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String    @id
+  timestamp   String
+  user        String
+  action      String
+  details     String?
+  workorderId String
+  workorder   Workorder @relation(fields: [workorderId], references: [id], onDelete: Cascade)
+}
+
+model Chat {
+  id          String      @id
+  title       String
+  createdAt   String
+  userId      String      @default("default-user")
+  messages    Message[]
+  userStories UserStory[]
+}
+
+model Message {
+  id        String  @id
+  role      String  // "user" or "ai"
+  content   String
+  timestamp String
+  chatId    String
+  chat      Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model UserStory {
+  id                 String                @id
+  title              String
+  description        String
+  userId             String                @default("default-user")
+  createdAt          String
+  chatId             String?
+  chat               Chat?                 @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  acceptanceCriteria AcceptanceCriterion[]
+  testCases          TestCase[]
+}
+
+model AcceptanceCriterion {
+  id          String    @id
+  content     String
+  userStoryId String
+  userStory   UserStory @relation(fields: [userStoryId], references: [id], onDelete: Cascade)
+}
+
+model TestCase {
+  id                String    @id
+  title             String
+  type              String    // "Positive", "Negative", "Edge", "Security", etc.
+  preconditions     String?
+  steps             String    // Line-separated or JSON array of steps
+  expectedResult    String
+  priority          String    @default("Medium")
+  executionStatus   String    @default("Pending")
+  executionComments String?
+  userStoryId       String
+  userStory         UserStory @relation(fields: [userStoryId], references: [id], onDelete: Cascade)
+}

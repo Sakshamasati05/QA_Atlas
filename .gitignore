@@ -1,0 +1,21 @@
+# Exclude other unrelated scratch projects
+/form-builder/
+/qa-presentation/
+/qa-workflow-presentation/
+/run-tracker/
+/workflow-app/
+/start-project.bat
+/scratch/
+
+# Ignore build, packages, secrets, and SQLite DB files
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+.system_generated/
+.DS_Store
+Thumbs.db
+
+# Ignore uploaded documents
+/workflow-backend/uploads/
