@@ -489,6 +489,126 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey) {
   return resData.choices[0].message.content;
 }
 
+// --- HELPER: COPILOT CHAT COMPLETION ---
+async function getCopilotChatResponse(chatId, newContent, apiKey) {
+  const previousMessages = await prisma.message.findMany({
+    where: { chatId },
+    orderBy: { timestamp: 'asc' }
+  });
+
+  const messages = previousMessages.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'assistant',
+    content: msg.content
+  }));
+
+  messages.push({
+    role: 'user',
+    content: newContent
+  });
+
+  if (!apiKey) {
+    return "I am the QAtlas AI Assistant. Please configure your Copilot API Key in the settings panel to get real-time intelligent responses.\\n\\n*Note: Running in offline/mock mode.*";
+  }
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Copilot API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  return resData.choices[0].message.content;
+}
+
+// --- HELPER: COPILOT TEST CASES GENERATOR ---
+async function getCopilotTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+
+  if (!apiKey) {
+    throw new Error("No Copilot API key found.");
+  }
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: promptText }],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Copilot API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  const rawText = resData.choices[0].message.content;
+  
+  let jsonString = rawText.trim();
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
+  }
+  
+  return JSON.parse(jsonString);
+}
+
+// --- HELPER: COPILOT GENERATION FROM DOCUMENTS ---
+async function getCopilotTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
+  const promptText = buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+
+  if (!apiKey) {
+    throw new Error("No Copilot API key found.");
+  }
+
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: promptText }],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Copilot API Error: ${errText}`);
+  }
+
+  const resData = await response.json();
+  const rawText = resData.choices[0].message.content;
+  
+  let jsonString = rawText.trim();
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
+  }
+  
+  return JSON.parse(jsonString);
+}
+
+
 // --- HELPER: OPENAI/CHATGPT TEST CASES GENERATOR ---
 async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
   const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
@@ -860,7 +980,7 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
     const { chatId } = req.params;
     const { role, content, title, userId = 'default-user' } = req.body;
     const provider = req.headers['x-provider'] || 'gemini';
-    const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : process.env.GEMINI_API_KEY);
+    const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : provider === 'chatgpt' ? process.env.OPENAI_API_KEY : provider === 'copilot' ? process.env.COPILOT_API_KEY : process.env.GEMINI_API_KEY);
 
     let chat = await prisma.chat.findUnique({ where: { id: chatId } });
     if (!chat) {
@@ -888,12 +1008,16 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
     try {
       if (provider === 'claude') {
         aiResponseContent = await getClaudeChatResponse(chatId, content, apiKey);
+      } else if (provider === 'chatgpt') {
+        aiResponseContent = await getOpenAiChatResponse(chatId, content, apiKey);
+      } else if (provider === 'copilot') {
+        aiResponseContent = await getCopilotChatResponse(chatId, content, apiKey);
       } else {
         aiResponseContent = await getGeminiChatResponse(chatId, content, apiKey);
       }
     } catch (apiErr) {
       console.error(`${provider} Chat API Error:`, apiErr.message);
-      aiResponseContent = `Failed to get response from ${provider === 'claude' ? 'Claude' : 'Gemini'} API: ${apiErr.message}. Please verify your API Key and internet connection.`;
+      aiResponseContent = `Failed to get response from ${provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'copilot' ? 'Copilot' : 'Gemini'} API: ${apiErr.message}. Please verify your API Key and internet connection.`;
     }
 
     const aiMessage = await prisma.message.create({
@@ -1034,6 +1158,7 @@ app.post('/api/user-stories', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || 
       (provider === 'claude' ? process.env.CLAUDE_API_KEY : 
        provider === 'chatgpt' ? process.env.OPENAI_API_KEY : 
+       provider === 'copilot' ? process.env.COPILOT_API_KEY : 
        process.env.GEMINI_API_KEY);
     let generatedRaw = [];
 
@@ -1094,6 +1219,34 @@ app.post('/api/user-stories', async (req, res) => {
         );
       } catch (err) {
         console.error('OpenAI API failed, falling back to mock:', err.message);
+        generatedRaw = generateMockTestCases(
+          userStory,
+          acceptanceCriteria,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          format
+        );
+      }
+    } else if (provider === 'copilot') {
+      try {
+        generatedRaw = await getCopilotTestCases(
+          userStory,
+          acceptanceCriteria,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          existingTitles,
+          customizeVolume,
+          format,
+          apiKey
+        );
+      } catch (err) {
+        console.error('Copilot API failed, falling back to mock:', err.message);
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1436,6 +1589,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || 
       (provider === 'claude' ? process.env.CLAUDE_API_KEY : 
        provider === 'chatgpt' ? process.env.OPENAI_API_KEY : 
+       provider === 'copilot' ? process.env.COPILOT_API_KEY : 
        process.env.GEMINI_API_KEY);
 
     let result;
@@ -1496,6 +1650,34 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         );
       } catch (err) {
         console.error('OpenAI API generate-from-doc error, falling back to mock:', err.message);
+        result = generateMockTestCasesFromDoc(
+          documentName,
+          documentText,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          format
+        );
+      }
+    } else if (provider === 'copilot') {
+      try {
+        result = await getCopilotTestCasesFromDoc(
+          documentName,
+          documentText,
+          positiveCount,
+          negativeCount,
+          edgeCount,
+          securityCount,
+          performanceCount,
+          existingTitles,
+          customizeVolume,
+          format,
+          apiKey
+        );
+      } catch (err) {
+        console.error('Copilot API generate-from-doc error, falling back to mock:', err.message);
         result = generateMockTestCasesFromDoc(
           documentName,
           documentText,

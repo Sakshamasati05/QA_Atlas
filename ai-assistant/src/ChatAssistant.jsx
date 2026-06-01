@@ -14,12 +14,14 @@ export default function ChatAssistant() {
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('qatlas_geminiKey') || '');
   const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem('qatlas_claudeKey') || '');
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('qatlas_openaiKey') || '');
+  const [copilotKey, setCopilotKey] = useState(() => localStorage.getItem('qatlas_copilotKey') || '');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
   const [tempGeminiKey, setTempGeminiKey] = useState(geminiKey);
   const [tempClaudeKey, setTempClaudeKey] = useState(claudeKey);
   const [tempOpenaiKey, setTempOpenaiKey] = useState(openaiKey);
+  const [tempCopilotKey, setTempCopilotKey] = useState(copilotKey);
   const [theme, setTheme] = useState(() => localStorage.getItem('qatlas_theme') || 'light');
 
   // QAtlas Generator Input Form
@@ -209,7 +211,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -289,7 +291,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -370,7 +372,7 @@ export default function ChatAssistant() {
     });
 
     try {
-      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : geminiKey;
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
         'x-provider': provider
@@ -630,11 +632,13 @@ export default function ChatAssistant() {
     setGeminiKey(tempGeminiKey);
     setClaudeKey(tempClaudeKey);
     setOpenaiKey(tempOpenaiKey);
+    setCopilotKey(tempCopilotKey);
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
     localStorage.setItem('qatlas_geminiKey', tempGeminiKey);
     localStorage.setItem('qatlas_claudeKey', tempClaudeKey);
     localStorage.setItem('qatlas_openaiKey', tempOpenaiKey);
+    localStorage.setItem('qatlas_copilotKey', tempCopilotKey);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -895,6 +899,7 @@ export default function ChatAssistant() {
             setTempGeminiKey(geminiKey);
             setTempClaudeKey(claudeKey);
             setTempOpenaiKey(openaiKey);
+            setTempCopilotKey(copilotKey);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -1900,6 +1905,7 @@ export default function ChatAssistant() {
                 <option value="gemini">Google Gemini 1.5 Flash</option>
                 <option value="claude">Anthropic Claude 3.5 Sonnet</option>
                 <option value="chatgpt">ChatGPT (gpt-4o-mini)</option>
+                <option value="copilot">Microsoft/GitHub Copilot</option>
               </select>
             </div>
 
@@ -1933,6 +1939,17 @@ export default function ChatAssistant() {
                 value={tempOpenaiKey}
                 onChange={(e) => setTempOpenaiKey(e.target.value)}
                 placeholder={openaiKey ? "••••••••••••••••" : "Paste OpenAI API Key here..."}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Copilot API Key</label>
+              <input
+                type="password"
+                className="sidebar-input"
+                value={tempCopilotKey}
+                onChange={(e) => setTempCopilotKey(e.target.value)}
+                placeholder={copilotKey ? "••••••••••••••••" : "Paste Copilot API Key here..."}
               />
               <span className="upload-hint" style={{ marginTop: '2px' }}>
                 Keys are saved locally in your browser. If a key is missing for your selected provider, QAtlas falls back to the advanced heuristic mock generator.
