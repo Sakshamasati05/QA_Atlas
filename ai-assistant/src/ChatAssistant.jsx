@@ -935,10 +935,10 @@ export default function ChatAssistant() {
                 </div>
 
                 <button 
-                  className="settings-btn" 
+                  className="new-session-btn" 
                   onClick={() => handleGenerateFromDoc(f)} 
                   disabled={isTyping}
-                  style={{ padding: '4px 8px', fontSize: '11px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#fff' }}
+                  style={{ padding: '6px 12px', fontSize: '11.5px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', border: 'none', borderRadius: '6px', color: '#ffffff', fontWeight: '600', cursor: 'pointer', boxShadow: '0 2px 8px var(--primary-glow)', width: '100%', marginTop: '4px' }}
                 >
                   {isTyping ? 'Generating...' : '✨ Generate Test Cases'}
                 </button>
