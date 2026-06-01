@@ -991,6 +991,19 @@ app.post('/api/user-stories', async (req, res) => {
       existingTitles = matchedStory.testCases.map(tc => tc.title.toLowerCase().trim());
     } else {
       storyId = 'US-' + Date.now();
+      if (chatId) {
+        const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
+        if (!chatExists) {
+          await prisma.chat.create({
+            data: {
+              id: chatId,
+              title: title || 'New Chat',
+              userId: userId,
+              createdAt: new Date().toISOString()
+            }
+          });
+        }
+      }
       matchedStory = await prisma.userStory.create({
         data: {
           id: storyId,
@@ -1531,6 +1544,19 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     if (isNewStory) {
       finalStoryId = 'US-' + Date.now();
       const storyTitle = `Story from ${documentName}`;
+      if (chatId) {
+        const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
+        if (!chatExists) {
+          await prisma.chat.create({
+            data: {
+              id: chatId,
+              title: `Doc: ${documentName}`,
+              userId: userId,
+              createdAt: new Date().toISOString()
+            }
+          });
+        }
+      }
       await prisma.userStory.create({
         data: {
           id: finalStoryId,
