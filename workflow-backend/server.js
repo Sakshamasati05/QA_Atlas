@@ -409,6 +409,66 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
 }
 
 
+function generateDynamicMockChatResponse(provider, content) {
+  const query = (content || '').toLowerCase().trim();
+  const providerLabel = provider === 'claude' ? 'Claude 3.5 Sonnet' : 
+                        provider === 'chatgpt' ? 'ChatGPT (gpt-4o-mini)' : 
+                        provider === 'copilot' ? 'Copilot' : 'Gemini 1.5 Flash';
+
+  // 1. Check for greeting keywords
+  if (query === 'hello' || query === 'hi' || query === 'hey' || query === 'yo') {
+    if (provider === 'claude') {
+      return `Hello! I am Claude 3.5 Sonnet, your QA testing assistant. How can I help you design, edit, or analyze test suites today?\n\n*(Note: Running in offline mock mode)*`;
+    } else if (provider === 'chatgpt') {
+      return `Hello there! I'm ChatGPT (gpt-4o-mini). I'm ready to assist you in generating test scenarios, writing acceptance criteria, or refining test cases. What feature are we testing today?\n\n*(Note: Running in offline mock mode)*`;
+    } else if (provider === 'copilot') {
+      return `Hello! I am Copilot. I'm connected to your QAtlas workspace to help write code tests, verify edge cases, and ensure high test coverage. What can I do for you today?\n\n*(Note: Running in offline mock mode)*`;
+    } else {
+      return `Hi! I am Gemini 1.5 Flash. I'm here to help you extract requirements and build comprehensive test plans from your user stories or documents. How can I help?\n\n*(Note: Running in offline mock mode)*`;
+    }
+  }
+
+  // 2. Check for test case generation keywords
+  if (query.includes('test case') || query.includes('testcase') || query.includes('scenario') || query.includes('write test')) {
+    return `I'd be happy to help you write test cases! As ${providerLabel} running in offline mode, here is a mock test suite template for a standard Login Feature:
+
+1. **TC001 (Positive):** Verify successful login with valid credentials (username & password).
+2. **TC002 (Negative):** Verify validation error when logging in with an invalid password.
+3. **TC003 (Edge):** Verify behavior when inputting SQL injection characters in the username field.
+4. **TC004 (Security):** Verify password field masks characters during entry.
+5. **TC005 (Performance):** Verify login responds within 1.5 seconds.
+
+To generate actual customized test cases from your own functional requirements, please make sure to input your User Story and Acceptance Criteria in the generator panel or upload a BRD document!`;
+  }
+
+  // 3. Check for format keywords
+  if (query.includes('format') || query.includes('dropdown') || query.includes('lly') || query.includes('del')) {
+    return `QAtlas supports three specialized test case formats which you can select from the dropdown before generating: 
+- **LLY TU:** Includes detailed fields like Test Path, Designer, Category, and Step Name.
+- **LLY PBPA:** Focuses on Test Summary, Steps to be followed, and Expected Result.
+- **DEL:** Uses sequential IDs (TC001, TC002...) and includes Test Data and Bug ID fields.
+
+Simply select the format in the sidebar dropdown (for documents) or the generator form (for user stories) and I will structure the generated suites accordingly!`;
+  }
+
+  // 4. Check for export/jira keywords
+  if (query.includes('jira') || query.includes('export') || query.includes('csv') || query.includes('json')) {
+    return `You can easily export your generated test suites to Jira! Navigate to the **Test Cases Repository** tab, click **💼 Jira Export** to copy the description table markdown, or click **Export JSON/CSV** to download files ready to import. Let me know if you need help formatting them!`;
+  }
+
+  // 5. Check for dry run keywords
+  if (query.includes('dry run') || query.includes('run') || query.includes('execute') || query.includes('simulator')) {
+    return `The Dry-Run Simulator lets you manually execute test cases step-by-step. Go to the **Test Cases Repository** tab, click **▶️ Start Dry-Run**, and you can mark each step or case as Passed, Failed, or Blocked. All execution results and logs will be saved directly into the SQLite database!`;
+  }
+
+  // 6. Default response
+  return `I understand you are asking about: "${content}". 
+
+I am currently running in offline mock mode as **${providerLabel}**. 
+
+To get an active, highly accurate, and intelligent response connected directly to the real model API, please paste your API Key for **${providerLabel}** into the settings panel (⚙️ Settings button in the bottom-left corner of the console). Once configured, I can provide real-time custom answers for anything you ask!`;
+}
+
 // --- HELPER: GEMINI CHAT COMPLETION ---
 async function getGeminiChatResponse(chatId, newContent, apiKey) {
   const previousMessages = await prisma.message.findMany({
@@ -427,7 +487,7 @@ async function getGeminiChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return "I am the QAtlas AI Assistant. Please configure your Gemini API Key in the settings panel to get real-time intelligent responses.\n\n*Note: Running in offline/mock mode.*";
+    return generateDynamicMockChatResponse('gemini', newContent);
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -464,7 +524,7 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return "I am the QAtlas AI Assistant. Please configure your OpenAI API Key in the settings panel to get real-time intelligent responses.\n\n*Note: Running in offline/mock mode.*";
+    return generateDynamicMockChatResponse('chatgpt', newContent);
   }
 
   const url = 'https://api.openai.com/v1/chat/completions';
@@ -507,7 +567,7 @@ async function getCopilotChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return "I am the QAtlas AI Assistant. Please configure your Copilot API Key in the settings panel to get real-time intelligent responses.\\n\\n*Note: Running in offline/mock mode.*";
+    return generateDynamicMockChatResponse('copilot', newContent);
   }
 
   const url = 'https://api.openai.com/v1/chat/completions';
@@ -892,7 +952,7 @@ async function getClaudeChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return "I am the QAtlas AI Assistant. Please configure your Claude API Key in the settings panel to get real-time intelligent responses.\n\n*Note: Running in offline/mock mode.*";
+    return generateDynamicMockChatResponse('claude', newContent);
   }
 
   const url = 'https://api.anthropic.com/v1/messages';
