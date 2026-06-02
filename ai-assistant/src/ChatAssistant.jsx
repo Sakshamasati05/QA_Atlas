@@ -880,7 +880,7 @@ export default function ChatAssistant() {
 
         {/* Uploaded files display list */}
         {uploadedFiles.length > 0 && (
-          <div className="uploaded-file-list" style={{ maxHeight: '180px' }}>
+          <div className="uploaded-file-list">
             {uploadedFiles.map((f, idx) => (
               <div key={idx} className="uploaded-file-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

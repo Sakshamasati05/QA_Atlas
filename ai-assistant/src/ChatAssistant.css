@@ -219,8 +219,6 @@ body {
 }
 
 .uploaded-file-list {
-  max-height: 120px;
-  overflow-y: auto;
   margin-top: 10px;
   display: flex;
   flex-direction: column;
