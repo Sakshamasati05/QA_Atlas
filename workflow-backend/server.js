@@ -1235,6 +1235,7 @@ Return a JSON object with this EXACT schema:
       "testName": "string (name of the test case)",
       "designer": "string (designer name, e.g. QA Team)",
       "category": "string (functional category, e.g. Authentication)",
+      "description": "string (clear summary description of what this test case verifies)",
       "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
       "stepName": "string (name of this test step, e.g. Input credentials)",
       "stepDescription": "string (detailed step actions, e.g. 1. Type email\\n2. Type password)",
