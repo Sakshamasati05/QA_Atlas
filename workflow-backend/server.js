@@ -1294,6 +1294,7 @@ Return a JSON object with this EXACT schema:
     {
       "customId": "TC001",
       "title": "string (Test Case Title)",
+      "description": "string (detailed description of what this test case verifies)",
       "type": "string (Positive, Negative, Edge, Security, or Performance)",
       "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
       "steps": "string (step-by-step actions)",
@@ -1332,8 +1333,8 @@ Generate only the optimal number of test cases across all necessary types (Posit
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
 **CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
-1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps.
+1. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
+2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
 3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
 4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
 5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
@@ -1359,6 +1360,7 @@ function mapTestCaseToFormat(tc, format, index) {
       testName: tc.testName || tc.title || 'Generated Scenario',
       designer: tc.designer || 'QA Team',
       category: tc.category || 'General',
+      description: tc.description || 'Verify the scenario.',
       preconditions: tc.preconditions || 'N/A',
       stepName: tc.stepName || 'Perform Action',
       stepDescription: tc.stepDescription || tc.steps || '1. Action.',
@@ -1372,6 +1374,7 @@ function mapTestCaseToFormat(tc, format, index) {
       type: tc.type || 'Positive',
       preconditions: tc.preconditions || 'N/A',
       testCaseDescription: tc.testCaseDescription || tc.description || 'Verify function.',
+      description: tc.testCaseDescription || tc.description || 'Verify function.',
       stepsToBeFollowed: tc.stepsToBeFollowed || tc.steps || '1. Action.',
       expectedResult: tc.expectedResult || 'Expected Result.',
       actualResult: tc.actualResult || 'N/A'
@@ -1391,8 +1394,14 @@ function mapTestCaseToFormat(tc, format, index) {
     };
   } else {
     return {
-      ...tc,
-      customId: tc.customId || sequentialId
+      customId: tc.customId || sequentialId,
+      title: tc.title || 'Generated Scenario',
+      description: tc.description || 'Verify function.',
+      type: tc.type || 'Positive',
+      preconditions: tc.preconditions || 'N/A',
+      steps: tc.steps || '1. Action.',
+      expectedResult: tc.expectedResult || 'Expected Result.',
+      priority: tc.priority || 'Medium'
     };
   }
 }
@@ -1423,6 +1432,7 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
     steps = tc.stepsToBeFollowed || tc.steps || '1. Action.';
     customFieldsObj = {
       testCaseDescription: tc.testCaseDescription || tc.description || 'N/A',
+      description: tc.testCaseDescription || tc.description || 'N/A',
       actualResult: tc.actualResult || 'N/A'
     };
   } else if (format === 'DEL') {
@@ -1431,12 +1441,17 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
     customFieldsObj = {
       testData: tc.testData || 'N/A',
       actualResult: tc.actualResult || 'N/A',
-      bugId: tc.bugId || 'N/A'
+      bugId: tc.bugId || 'N/A',
+      description: tc.description || tc.title || 'N/A'
     };
     if (tc.status) {
       // Use status if present, otherwise default to Pending
       priority = 'Medium';
     }
+  } else {
+    customFieldsObj = {
+      description: tc.description || 'N/A'
+    };
   }
 
   return await prisma.testCase.create({
@@ -1992,8 +2007,8 @@ Tasks:
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
 **CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
-1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps.
+1. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
+2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
 3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
 4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
 5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.

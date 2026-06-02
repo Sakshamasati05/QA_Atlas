@@ -650,13 +650,14 @@ export default function ChatAssistant() {
       });
       return md;
     } else {
-      let md = `||Test Case ID||Type||Title||Preconditions||Steps||Expected Result||Priority||Status||\n`;
+      let md = `||Test Case ID||Type||Title||Description||Preconditions||Steps||Expected Result||Priority||Status||\n`;
       testCases.forEach(tc => {
+        const desc = getCustomField(tc, 'description') || 'N/A';
         const preconditions = tc.preconditions || 'N/A';
         const steps = (tc.steps || '').replace(/\n/g, '\\\\ ');
         const expected = (tc.expectedResult || '').replace(/\n/g, '\\\\ ');
         const status = tc.executionStatus || 'Pending';
-        md += `|${tc.customId || tc.id}|${tc.type}|${tc.title}|${preconditions}|${steps}|${expected}|${tc.priority}|${status}|\n`;
+        md += `|${tc.customId || tc.id}|${tc.type}|${tc.title}|${desc}|${preconditions}|${steps}|${expected}|${tc.priority}|${status}|\n`;
       });
       return md;
     }
@@ -1334,6 +1335,28 @@ export default function ChatAssistant() {
                         ) : editingTcData.format === 'DEL' ? (
                           <>
                             <div className="detail-row">
+                              <label className="detail-label">Description</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'description') || editingTcData.title}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const currentFields = typeof editingTcData.customFields === 'string'
+                                    ? JSON.parse(editingTcData.customFields || '{}')
+                                    : (editingTcData.customFields || {});
+                                  setEditingTcData({
+                                    ...editingTcData,
+                                    title: val,
+                                    customFields: {
+                                      ...currentFields,
+                                      description: val
+                                    }
+                                  });
+                                }}
+                              />
+                            </div>
+                            <div className="detail-row">
                               <label className="detail-label">Preconditions</label>
                               <input
                                 type="text"
@@ -1388,6 +1411,15 @@ export default function ChatAssistant() {
                           </>
                         ) : (
                           <>
+                            <div className="detail-row">
+                              <label className="detail-label">Description</label>
+                              <input
+                                type="text"
+                                className="tc-edit-input"
+                                value={getCustomField(editingTcData, 'description')}
+                                onChange={(e) => updateCustomField('description', e.target.value)}
+                              />
+                            </div>
                             <div className="detail-row">
                               <label className="detail-label">Preconditions</label>
                               <input
@@ -1562,6 +1594,10 @@ export default function ChatAssistant() {
                               </>
                             ) : (
                               <>
+                                <div className="detail-row">
+                                  <span className="detail-label">Description</span>
+                                  <span className="detail-value">{getCustomField(tc, 'description')}</span>
+                                </div>
                                 {tc.preconditions && tc.preconditions !== 'N/A' && (
                                   <div className="detail-row">
                                     <span className="detail-label">Preconditions</span>
