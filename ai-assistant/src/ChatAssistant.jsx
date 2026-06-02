@@ -258,6 +258,12 @@ export default function ChatAssistant() {
       }
     } catch (err) {
       console.error('Failed to generate test cases:', err);
+      // Clean up temp message on failure
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId
+          ? { ...c, messages: c.messages.filter(m => m.id !== 'temp') }
+          : c
+      ));
     } finally {
       setIsTyping(false);
     }
@@ -274,11 +280,12 @@ export default function ChatAssistant() {
     setIsTyping(true);
     setActiveTab('generator');
 
+    const tempId = 'temp-' + Date.now();
     // Optimistically add user chat message
     setChats(prev => {
       const chatIndex = prev.findIndex(c => c.id === currentChatId);
       const tempUserMsg = { 
-        id: 'temp-' + Date.now(), 
+        id: tempId, 
         role: 'user', 
         content: `Extract requirements and generate QAtlas test cases from document: ${file.name}` 
       };
@@ -341,6 +348,12 @@ export default function ChatAssistant() {
       }
     } catch (err) {
       console.error('Failed to generate from document:', err);
+      // Clean up temp message on failure
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId
+          ? { ...c, messages: c.messages.filter(m => m.id !== tempId) }
+          : c
+      ));
     } finally {
       setIsTyping(false);
     }
@@ -348,7 +361,7 @@ export default function ChatAssistant() {
 
   // --- Send follow-up chat message ---
   const handleSendChatMessage = async () => {
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || isTyping) return;
     let currentChatId = activeChatId;
     if (!currentChatId) {
       currentChatId = generateChatId();
@@ -356,18 +369,22 @@ export default function ChatAssistant() {
     }
 
     const content = chatInput;
+    const tempId = 'temp-' + Date.now();
     setChatInput('');
     setIsTyping(true);
 
-    // Optimistically add user message
+    // Optimistically add user message so it shows immediately
     setChats(prev => {
       const chatIndex = prev.findIndex(c => c.id === currentChatId);
-      const tempUserMsg = { id: 'temp-' + Date.now(), role: 'user', content };
+      const tempUserMsg = { id: tempId, role: 'user', content };
       if (chatIndex === -1) {
         return [{ id: currentChatId, title: content.substring(0, 20), messages: [tempUserMsg] }, ...prev];
       }
       const newChats = [...prev];
-      newChats[chatIndex].messages.push(tempUserMsg);
+      newChats[chatIndex] = {
+        ...newChats[chatIndex],
+        messages: [...newChats[chatIndex].messages, tempUserMsg]
+      };
       return newChats;
     });
 
@@ -375,7 +392,8 @@ export default function ChatAssistant() {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
       const headers = { 
         'Content-Type': 'application/json',
-        'x-provider': provider
+        'x-provider': provider,
+        'x-format': format
       };
       if (activeKey) headers['x-api-key'] = activeKey;
 
@@ -391,14 +409,34 @@ export default function ChatAssistant() {
       });
 
       if (res.ok) {
-        await fetchChats();
+        const data = await res.json();
+        // Replace temp message with actual user/AI messages from the response
+        setChats(prev => prev.map(c =>
+          c.id === currentChatId
+            ? {
+                ...c,
+                messages: [
+                  ...c.messages.filter(m => m.id !== tempId),
+                  data.userMessage,
+                  data.aiMessage
+                ]
+              }
+            : c
+        ));
       }
     } catch (err) {
       console.error('Failed to send message:', err);
+      // Remove temp message on failure
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId
+          ? { ...c, messages: c.messages.filter(m => m.id !== tempId) }
+          : c
+      ));
     } finally {
       setIsTyping(false);
     }
   };
+
 
   const deleteChat = async (e, chatId) => {
     e.stopPropagation();
@@ -627,18 +665,23 @@ export default function ChatAssistant() {
 
   // --- Settings Actions ---
   const handleSaveSettings = () => {
+    const trimmedGemini = (tempGeminiKey || '').trim();
+    const trimmedClaude = (tempClaudeKey || '').trim();
+    const trimmedOpenai = (tempOpenaiKey || '').trim();
+    const trimmedCopilot = (tempCopilotKey || '').trim();
+
     setUserId(tempUserId);
     setProvider(tempProvider);
-    setGeminiKey(tempGeminiKey);
-    setClaudeKey(tempClaudeKey);
-    setOpenaiKey(tempOpenaiKey);
-    setCopilotKey(tempCopilotKey);
+    setGeminiKey(trimmedGemini);
+    setClaudeKey(trimmedClaude);
+    setOpenaiKey(trimmedOpenai);
+    setCopilotKey(trimmedCopilot);
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
-    localStorage.setItem('qatlas_geminiKey', tempGeminiKey);
-    localStorage.setItem('qatlas_claudeKey', tempClaudeKey);
-    localStorage.setItem('qatlas_openaiKey', tempOpenaiKey);
-    localStorage.setItem('qatlas_copilotKey', tempCopilotKey);
+    localStorage.setItem('qatlas_geminiKey', trimmedGemini);
+    localStorage.setItem('qatlas_claudeKey', trimmedClaude);
+    localStorage.setItem('qatlas_openaiKey', trimmedOpenai);
+    localStorage.setItem('qatlas_copilotKey', trimmedCopilot);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -1019,7 +1062,7 @@ export default function ChatAssistant() {
                   <span>QAtlas Discussion Log</span>
                   <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>
                     {(provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey) 
-                      ? `⚡ ${provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'copilot' ? 'Copilot' : 'Gemini'} Connected` 
+                      ? `⚡ ${provider === 'claude' ? 'Claude Opus 4.8' : provider === 'chatgpt' ? 'ChatGPT (GPT-5.5)' : provider === 'copilot' ? 'Microsoft Copilot' : 'Gemini 3.5 Flash'} Connected` 
                       : 'Mock offline mode'}
                   </span>
                 </div>
@@ -1902,15 +1945,15 @@ export default function ChatAssistant() {
                 value={tempProvider}
                 onChange={(e) => setTempProvider(e.target.value)}
               >
-                <option value="gemini">Google Gemini 1.5 Flash</option>
-                <option value="claude">Anthropic Claude 3.5 Sonnet</option>
-                <option value="chatgpt">ChatGPT (gpt-4o-mini)</option>
-                <option value="copilot">Microsoft/GitHub Copilot</option>
+                <option value="gemini">Google Gemini 3.5 Flash</option>
+                <option value="claude">Anthropic Claude Opus 4.8</option>
+                <option value="chatgpt">ChatGPT (GPT-5.5)</option>
+                <option value="copilot">Microsoft Copilot (GPT-5.5 + multi-model)</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label>Gemini API Key</label>
+              <label>Gemini API Key (Free Tier Available)</label>
               <input
                 type="password"
                 className="sidebar-input"
@@ -1918,6 +1961,9 @@ export default function ChatAssistant() {
                 onChange={(e) => setTempGeminiKey(e.target.value)}
                 placeholder={geminiKey ? "••••••••••••••••" : "Paste Gemini API Key here..."}
               />
+              <span className="upload-hint" style={{ marginTop: '4px', display: 'block' }}>
+                Create a 100% free developer key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a>.
+              </span>
             </div>
 
             <div className="form-group">

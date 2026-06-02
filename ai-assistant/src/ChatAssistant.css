@@ -633,6 +633,9 @@ body {
   border-radius: 12px;
   font-size: 13.5px;
   line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .message-bubble.user {
@@ -651,6 +654,9 @@ body {
 /* Markdown formatting inside chat */
 .message-bubble.ai p {
   margin-bottom: 8px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 .message-bubble.ai ul, .message-bubble.ai ol {
   margin-left: 18px;

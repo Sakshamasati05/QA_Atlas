@@ -409,68 +409,581 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
 }
 
 
-function generateDynamicMockChatResponse(provider, content) {
-  const query = (content || '').toLowerCase().trim();
-  const providerLabel = provider === 'claude' ? 'Claude 3.5 Sonnet' : 
-                        provider === 'chatgpt' ? 'ChatGPT (gpt-4o-mini)' : 
-                        provider === 'copilot' ? 'Copilot' : 'Gemini 1.5 Flash';
+const MOCK_FEATURE_TESTS = {
+  login: {
+    title: "Login Feature",
+    cases: [
+      {
+        customId: "TC001",
+        title: "Verify login with valid credentials",
+        type: "Positive",
+        preconditions: "[AC1] User is on login page.",
+        steps: "1. Enter valid email.\n2. Enter valid password.\n3. Click Login.",
+        expectedResult: "User is authenticated and redirected to Dashboard.",
+        priority: "High",
+        testPath: "/Auth/Login",
+        testName: "Valid Login",
+        designer: "QA Team",
+        category: "Authentication",
+        stepName: "Submit Credentials",
+        stepDescription: "1. Type valid email.\n2. Type valid password.\n3. Click Submit.",
+        evidenceRequired: "Yes",
+        testSummary: "Successful user authentication via credentials",
+        testCaseDescription: "Verify user is successfully logged in with valid details.",
+        stepsToBeFollowed: "1. Provide credentials.\n2. Submit form.",
+        actualResult: "N/A",
+        description: "Login with valid credentials",
+        testData: "user@example.com / Pass123",
+        testSteps: "1. Input credentials.\n2. Click Login.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC002",
+        title: "Verify validation error on empty fields",
+        type: "Negative",
+        preconditions: "[AC2] User on login screen.",
+        steps: "1. Click Login button without inputs.",
+        expectedResult: "Validation error 'Email and password required' is shown.",
+        priority: "High",
+        testPath: "/Auth/Login",
+        testName: "Empty Input Check",
+        designer: "QA Team",
+        category: "Authentication",
+        stepName: "Submit Empty Form",
+        stepDescription: "1. Trigger login action without entering data.",
+        evidenceRequired: "No",
+        testSummary: "Fields validation on empty input submission",
+        testCaseDescription: "Verify validation alerts display on empty fields.",
+        stepsToBeFollowed: "1. Select Login without inputting values.",
+        actualResult: "N/A",
+        description: "Submit blank login inputs",
+        testData: "None",
+        testSteps: "1. Trigger submission.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC003",
+        title: "Verify login attempt with wrong password",
+        type: "Negative",
+        preconditions: "[AC1] Registered account exists.",
+        steps: "1. Enter valid email.\n2. Enter invalid password.\n3. Click Login.",
+        expectedResult: "Access denied; 'Invalid email or password' alert shown.",
+        priority: "High",
+        testPath: "/Auth/Login",
+        testName: "Invalid Credential Login",
+        designer: "QA Team",
+        category: "Authentication",
+        stepName: "Input Incorrect Password",
+        stepDescription: "1. Type email.\n2. Type wrong password.\n3. Click Login.",
+        evidenceRequired: "Yes",
+        testSummary: "Authentication fail on wrong password",
+        testCaseDescription: "Verify system shows alert for incorrect password.",
+        stepsToBeFollowed: "1. Type email.\n2. Type wrong password.\n3. Click Login.",
+        actualResult: "N/A",
+        description: "Authentication with wrong password",
+        testData: "wrongpass123",
+        testSteps: "1. Type wrong credentials.\n2. Click Login.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC004",
+        title: "Verify password field masking in UI",
+        type: "Security",
+        preconditions: "[AC3] Password input element exists.",
+        steps: "1. Type characters in password field.\n2. Verify masking.",
+        expectedResult: "Input characters are masked with bullets.",
+        priority: "Medium",
+        testPath: "/Auth/Login",
+        testName: "Password Input Masking",
+        designer: "QA Team",
+        category: "Authentication",
+        stepName: "Observe password input",
+        stepDescription: "1. Enter text in password input field.\n2. Confirm masking.",
+        evidenceRequired: "No",
+        testSummary: "Observe password text visibility",
+        testCaseDescription: "Verify character masking for secure typing.",
+        stepsToBeFollowed: "1. Type text in password input.",
+        actualResult: "N/A",
+        description: "Password masking check",
+        testData: "SecretPass",
+        testSteps: "1. Type credentials.\n2. Check mask.",
+        status: "Pending",
+        bugId: "N/A"
+      }
+    ]
+  },
+  payment: {
+    title: "Payment Checkout Integration",
+    cases: [
+      {
+        customId: "TC001",
+        title: "Verify successful payment process using card",
+        type: "Positive",
+        preconditions: "[AC1] Items are ready in checkout cart.",
+        steps: "1. Enter card details.\n2. Submit transaction.",
+        expectedResult: "Transaction succeeds; Order confirmed screen displayed.",
+        priority: "High",
+        testPath: "/Cart/Payment",
+        testName: "Successful Checkout",
+        designer: "QA Team",
+        category: "Payment Integration",
+        stepName: "Pay with valid card",
+        stepDescription: "1. Fill credit card details.\n2. Complete transaction.",
+        evidenceRequired: "Yes",
+        testSummary: "Checkout successfully with active card",
+        testCaseDescription: "Verify transaction goes through with valid card.",
+        stepsToBeFollowed: "1. Input card parameters.\n2. Click pay.",
+        actualResult: "N/A",
+        description: "Payment with valid card details",
+        testData: "Card Number=4111222233334444",
+        testSteps: "1. Enter card details.\n2. Click pay.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC002",
+        title: "Verify transaction fail error warning",
+        type: "Negative",
+        preconditions: "[AC2] Transaction processor online.",
+        steps: "1. Enter credit card with insufficient funds.\n2. Trigger payment.",
+        expectedResult: "Transaction failed; error message 'Insufficient funds' is shown.",
+        priority: "High",
+        testPath: "/Cart/Payment",
+        testName: "Declined Card Handling",
+        designer: "QA Team",
+        category: "Payment Integration",
+        stepName: "Pay with declined card",
+        stepDescription: "1. Fill declined credit card details.\n2. Complete transaction.",
+        evidenceRequired: "Yes",
+        testSummary: "Checkout failure on declined card payment",
+        testCaseDescription: "Verify system shows alert when card transaction is declined.",
+        stepsToBeFollowed: "1. Input declined card parameters.\n2. Click pay.",
+        actualResult: "N/A",
+        description: "Payment with declined card details",
+        testData: "Declined Card",
+        testSteps: "1. Enter declined card details.\n2. Click pay.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC003",
+        title: "Verify security of payment details transmission",
+        type: "Security",
+        preconditions: "[AC3] Network listener is active.",
+        steps: "1. Initiate payment.\n2. Capture payload parameters.",
+        expectedResult: "Card number, CVV, and expiration date are fully encrypted.",
+        priority: "High",
+        testPath: "/Cart/Payment",
+        testName: "Payment Encryption Audit",
+        designer: "QA Team",
+        category: "Payment Integration",
+        stepName: "Audit transaction payload",
+        stepDescription: "1. Capture payment request payload.\n2. Verify encryption.",
+        evidenceRequired: "Yes",
+        testSummary: "Billing information transit encryption check",
+        testCaseDescription: "Verify sensitive details are encrypted in transit.",
+        stepsToBeFollowed: "1. Capture POST request.\n2. Confirm security encryption.",
+        actualResult: "N/A",
+        description: "Card details encryption check",
+        testData: "Card payloads",
+        testSteps: "1. Verify network log encryption.",
+        status: "Pending",
+        bugId: "N/A"
+      }
+    ]
+  },
+  signup: {
+    title: "Signup & Registration",
+    cases: [
+      {
+        customId: "TC001",
+        title: "Verify successful account creation with valid credentials",
+        type: "Positive",
+        preconditions: "[AC1] Guest user is on register view.",
+        steps: "1. Enter valid email, name, and password.\n2. Accept Terms & Conditions.\n3. Click Register.",
+        expectedResult: "Account is created successfully, user registered, and confirmation email sent.",
+        priority: "High",
+        testPath: "/Register/Signup",
+        testName: "Successful Signup",
+        designer: "QA Team",
+        category: "Registration",
+        stepName: "Fill and Submit Signup Details",
+        stepDescription: "1. Provide email.\n2. Provide password.\n3. Click Submit.",
+        evidenceRequired: "Yes",
+        testSummary: "Create account with valid registration credentials",
+        testCaseDescription: "Verify guest user can successfully create a new account.",
+        stepsToBeFollowed: "1. Complete registration fields.\n2. Submit account creation.",
+        actualResult: "N/A",
+        description: "Create account with valid details",
+        testData: "guest@example.com / Password123!",
+        testSteps: "1. Enter credentials.\n2. Submit signup.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC002",
+        title: "Verify invalid email format validation warning",
+        type: "Negative",
+        preconditions: "[AC2] Field validations are active.",
+        steps: "1. Enter invalid email (e.g. guest@com).\n2. Click Register.",
+        expectedResult: "Form blocks submission and highlights email field with 'Invalid email address' error.",
+        priority: "Medium",
+        testPath: "/Register/Signup",
+        testName: "Email Format Validation",
+        designer: "QA Team",
+        category: "Registration",
+        stepName: "Input Bad Email",
+        stepDescription: "1. Provide invalid email pattern.\n2. Click signup.",
+        evidenceRequired: "No",
+        testSummary: "Format validation alert on malformed email",
+        testCaseDescription: "Verify signup is blocked for malformed email addresses.",
+        stepsToBeFollowed: "1. Input invalid email address.\n2. Click signup.",
+        actualResult: "N/A",
+        description: "Email structure check",
+        testData: "guest_invalid_mail",
+        testSteps: "1. Try signup with invalid email format.",
+        status: "Pending",
+        bugId: "N/A"
+      }
+    ]
+  },
+  search: {
+    title: "Search & Filtering Functionality",
+    cases: [
+      {
+        customId: "TC001",
+        title: "Verify accurate search results display",
+        type: "Positive",
+        preconditions: "[AC1] Product list database is loaded.",
+        steps: "1. Type valid query (e.g. 'Laptop') in search input.\n2. Press Enter or click Search.",
+        expectedResult: "Products matching the query are displayed correctly.",
+        priority: "High",
+        testPath: "/Search/SearchList",
+        testName: "Successful Search Query",
+        designer: "QA Team",
+        category: "Search & Filter",
+        stepName: "Input search term",
+        stepDescription: "1. Enter valid keyword in search bar.\n2. Trigger search.",
+        evidenceRequired: "Yes",
+        testSummary: "Search lists products matching query",
+        testCaseDescription: "Verify search returns correct matching items.",
+        stepsToBeFollowed: "1. Search for keyword.\n2. Inspect results.",
+        actualResult: "N/A",
+        description: "Search results with valid query",
+        testData: "keyword='Laptop'",
+        testSteps: "1. Type search query.\n2. Confirm product results.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC002",
+        title: "Verify empty results state message",
+        type: "Positive",
+        preconditions: "[AC2] Search function active.",
+        steps: "1. Type query with no products (e.g. 'xyz123abc').\n2. Click Search.",
+        expectedResult: "Zero results returned; message 'No matching products found' is displayed.",
+        priority: "Medium",
+        testPath: "/Search/SearchList",
+        testName: "No Matches Display",
+        designer: "QA Team",
+        category: "Search & Filter",
+        stepName: "Search unmatched query",
+        stepDescription: "1. Type unmatched key.\n2. Trigger search.",
+        evidenceRequired: "No",
+        testSummary: "Verify search empty state message",
+        testCaseDescription: "Verify system handles non-existent queries with empty state.",
+        stepsToBeFollowed: "1. Submit unmatched search term.\n2. Verify empty state text.",
+        actualResult: "N/A",
+        description: "Search empty results state",
+        testData: "keyword='xyz123abc'",
+        testSteps: "1. Type non-existent query.\n2. Check empty state display.",
+        status: "Pending",
+        bugId: "N/A"
+      }
+    ]
+  },
+  upload: {
+    title: "File Attachment & Document Upload",
+    cases: [
+      {
+        customId: "TC001",
+        title: "Verify successful upload of supported document formats",
+        type: "Positive",
+        preconditions: "[AC1] User is on upload field.",
+        steps: "1. Click attachment select.\n2. Select a PDF file under 10MB.\n3. Click upload.",
+        expectedResult: "Upload is successful; file is visible in files list.",
+        priority: "High",
+        testPath: "/Upload/Files",
+        testName: "Successful PDF Upload",
+        designer: "QA Team",
+        category: "Uploads",
+        stepName: "Attach valid file",
+        stepDescription: "1. Choose valid PDF.\n2. Submit attachment.",
+        evidenceRequired: "Yes",
+        testSummary: "Attach supported PDF file successfully",
+        testCaseDescription: "Verify PDF upload operates correctly.",
+        stepsToBeFollowed: "1. Select document.\n2. Click Upload.",
+        actualResult: "N/A",
+        description: "PDF format attachment upload",
+        testData: "sample_doc.pdf (5MB)",
+        testSteps: "1. Select sample_doc.pdf.\n2. Press Upload.",
+        status: "Pending",
+        bugId: "N/A"
+      },
+      {
+        customId: "TC002",
+        title: "Verify warning prompt on unsupported format upload",
+        type: "Negative",
+        preconditions: "[AC2] Format validation active.",
+        steps: "1. Select file with unsupported extension (e.g. .exe).\n2. Attempt upload.",
+        expectedResult: "Upload fails; validation displays 'File type not supported' warning.",
+        priority: "High",
+        testPath: "/Upload/Files",
+        testName: "Unsupported Type Check",
+        designer: "QA Team",
+        category: "Uploads",
+        stepName: "Attach exe file",
+        stepDescription: "1. Choose executable file.\n2. Attempt upload.",
+        evidenceRequired: "No",
+        testSummary: "Warning warning alert on unsupported file format",
+        testCaseDescription: "Verify file uploads block unsupported extensions.",
+        stepsToBeFollowed: "1. Select invalid format.\n2. Check validation alert.",
+        actualResult: "N/A",
+        description: "Upload unsupported format check",
+        testData: "virus.exe",
+        testSteps: "1. Choose virus.exe.\n2. Inspect warning alert.",
+        status: "Pending",
+        bugId: "N/A"
+      }
+    ]
+  }
+};
 
-  // 1. Check for greeting keywords
-  if (query === 'hello' || query === 'hi' || query === 'hey' || query === 'yo') {
-    if (provider === 'claude') {
-      return `Hello! I am Claude 3.5 Sonnet, your QA testing assistant. How can I help you design, edit, or analyze test suites today?\n\n*(Note: Running in offline mock mode)*`;
-    } else if (provider === 'chatgpt') {
-      return `Hello there! I'm ChatGPT (gpt-4o-mini). I'm ready to assist you in generating test scenarios, writing acceptance criteria, or refining test cases. What feature are we testing today?\n\n*(Note: Running in offline mock mode)*`;
-    } else if (provider === 'copilot') {
-      return `Hello! I am Copilot. I'm connected to your QAtlas workspace to help write code tests, verify edge cases, and ensure high test coverage. What can I do for you today?\n\n*(Note: Running in offline mock mode)*`;
+function getMockFeatureTestCases(query, format) {
+  const q = query.toLowerCase();
+  let matchedKey = null;
+  
+  if (q.includes('login') || q.includes('signin') || q.includes('sign-in')) {
+    matchedKey = 'login';
+  } else if (q.includes('signup') || q.includes('register') || q.includes('sign-up') || q.includes('registration')) {
+    matchedKey = 'signup';
+  } else if (q.includes('payment') || q.includes('checkout') || q.includes('cart') || q.includes('purchase') || q.includes('billing') || q.includes('card')) {
+    matchedKey = 'payment';
+  } else if (q.includes('search') || q.includes('filter') || q.includes('find')) {
+    matchedKey = 'search';
+  } else if (q.includes('upload') || q.includes('import') || q.includes('attachment') || q.includes('file')) {
+    matchedKey = 'upload';
+  }
+  
+  if (!matchedKey) return null;
+  
+  const feature = MOCK_FEATURE_TESTS[matchedKey];
+  const mappedCases = feature.cases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
+  return {
+    title: feature.title,
+    cases: mappedCases
+  };
+}
+
+function formatMockTestCasesToMarkdown(cases, format) {
+  return cases.map((tc, idx) => {
+    if (format === 'LLY TU') {
+      return `**[${tc.type}] ${tc.customId}: ${tc.testName}**\n` +
+             `*Path:* \`${tc.testPath}\` | *Designer:* ${tc.designer} | *Category:* ${tc.category}\n` +
+             `*Preconditions:* ${tc.preconditions}\n` +
+             `*Step (${tc.stepName}):*\n${tc.stepDescription.replace(/\n/g, '\n')}\n` +
+             `*Expected:* ${tc.expectedResult}\n` +
+             `*Evidence:* ${tc.evidenceRequired}`;
+    } else if (format === 'LLY PBPA') {
+      return `**[${tc.type}] ${tc.customId}: ${tc.testSummary}**\n` +
+             `*Preconditions:* ${tc.preconditions}\n` +
+             `*Description:* ${tc.testCaseDescription}\n` +
+             `*Steps:* \n${tc.stepsToBeFollowed.replace(/\n/g, '\n')}\n` +
+             `*Expected:* ${tc.expectedResult}`;
+    } else if (format === 'DEL') {
+      return `**[${tc.type}] ${tc.customId}: ${tc.description}**\n` +
+             `*Preconditions:* ${tc.preconditions}\n` +
+             `*Test Data:* \`${tc.testData}\` | *Status:* ${tc.status}\n` +
+             `*Steps:*\n${tc.testSteps.replace(/\n/g, '\n')}\n` +
+             `*Expected:* ${tc.expectedResult}`;
     } else {
-      return `Hi! I am Gemini 1.5 Flash. I'm here to help you extract requirements and build comprehensive test plans from your user stories or documents. How can I help?\n\n*(Note: Running in offline mock mode)*`;
+      return `**[${tc.type}] ${tc.customId}: ${tc.title}**\n` +
+             `*Preconditions:* ${tc.preconditions}\n` +
+             `*Steps:*\n${tc.steps.replace(/\n/g, '\n')}\n` +
+             `*Expected:* ${tc.expectedResult}\n` +
+             `*Priority:* ${tc.priority}`;
+    }
+  }).join('\n\n');
+}
+
+async function generateDynamicMockChatResponse(chatId, provider, content, hasKey = false, format = 'Default') {
+  const raw   = (content || '').trim();
+  const query = raw.toLowerCase();
+  const providerLabel = provider === 'claude'   ? 'Claude Opus 4.8' :
+                        provider === 'chatgpt'  ? 'ChatGPT GPT-5.5' :
+                        provider === 'copilot'  ? 'Microsoft Copilot (GPT-5.5 + multi-model)' :
+                                                  'Gemini 3.5 Flash';
+  const providerShort = provider === 'claude'   ? 'Claude' :
+                        provider === 'chatgpt'  ? 'ChatGPT' :
+                        provider === 'copilot'  ? 'Copilot' :
+                                                  'Gemini';
+
+  // Fetch context story for this chat
+  let activeStory = null;
+  try {
+    activeStory = await prisma.userStory.findFirst({
+      where: { chatId },
+      include: { testCases: true, acceptanceCriteria: true }
+    });
+  } catch (err) {
+    console.error('Error fetching context story for mock response:', err.message);
+  }
+
+  // ── 1. GREETINGS ──
+  const isGreeting = /^(h+i+|h+e+l+o+|h+e+y+|yo+|howdy|what'?s up|sup|good (morning|afternoon|evening)|namaste|hola|greetings|wassup)[\.!\?]*$/.test(query);
+  if (isGreeting) {
+    const greetings = ['Hey there! 👋', 'Hello! 😊', 'Hi! 👋', 'Hey! Great to see you! 😄'];
+    const g = greetings[Math.floor(Math.random() * greetings.length)];
+    let ctx = '';
+    if (activeStory) ctx = ` I see we're working on **"${activeStory.title}"** — ${activeStory.testCases.length} test case${activeStory.testCases.length !== 1 ? 's' : ''} generated so far.`;
+    const note = hasKey
+      ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI.*`
+      : `\n\n> 💡 *Tip: Add your ${providerShort} API key in ⚙️ Settings for real AI responses.*`;
+    return `${g} I'm your **${providerLabel}** QA assistant.${ctx} What can I help you with today? You can ask me to:\n- Generate or refine test cases\n- Explain a feature or format\n- Review acceptance criteria\n- Help with Jira export or dry-run${note}`;
+  }
+
+  // ── 2. HOW ARE YOU / SMALL TALK ──
+  if (/how are you|how r u|how do you do|you good|you okay|you alright/.test(query)) {
+    return `I'm doing great, thanks for asking! 😊 Ready to help you build bulletproof test suites. What would you like to work on?`;
+  }
+
+  // ── 3. THANKS / THANK YOU ──
+  if (/^(thanks?|thank you|ty|thx|cheers|great|awesome|perfect|got it|nice|cool)[\.!\?]*$/.test(query)) {
+    return `You're welcome! 😊 Let me know if there's anything else I can help with — more test cases, edge cases, or a quick dry-run review!`;
+  }
+
+  // ── 4. WHAT CAN YOU DO / HELP ──
+  if (/what can you do|what do you do|help me|how do i use|capabilities|features/.test(query)) {
+    return `Here's what I can help you with as **${providerLabel}**:\n\n📝 **Test Case Generation** — Generate positive, negative, edge, security & performance test cases from your user story\n📄 **Document Analysis** — Upload a requirements document and I'll generate full test suites\n🔄 **Dry-Run Simulation** — Walk through test cases step by step and log results\n📤 **Jira / CSV Export** — Export your test suites in one click\n💬 **Chat & Refine** — Ask follow-up questions to tweak, expand, or reformat any test case\n\nJust ask me anything! 🚀`;
+  }
+
+  // ── 5. CONNECT / API KEY / ONLINE MODE ──
+  if (/connect|online mode|api key|offline|how to use|activate/.test(query)) {
+    return `### Connect **${providerLabel}** to Live Mode\n\n1. Click **⚙️ Settings** (bottom-left sidebar)\n2. Select **${providerLabel}** from the Model Provider dropdown\n3. Paste your API key:\n   - **Gemini** → [Google AI Studio](https://aistudio.google.com/app/apikey) *(Free tier available)*\n   - **ChatGPT / Copilot** → [OpenAI Platform](https://platform.openai.com/api-keys)\n   - **Claude** → [Anthropic Console](https://console.anthropic.com/)\n4. Click **Save Settings**\n\nThe status badge will switch to **⚡ ${providerLabel.split(' ')[0]} Connected** and you'll get real AI responses instantly!`;
+  }
+
+  // ── 6. JIRA / EXPORT / DOWNLOAD (Matches specific intent before general test cases check) ──
+  if (/jira|export|csv|json|download/.test(query)) {
+    return `You can export and download your test suites in multiple formats:\n\n- **💼 Jira Export** — Copies a markdown table ready to paste into a Jira description\n- **📥 JSON Export** — Full structured data export of your test cases\n- **📊 CSV Export** — Spreadsheet-compatible download format\n\nTo export, head to the **Test Cases Repository** tab, select the active user story, and click the export button of your choice!`;
+  }
+
+  // ── 7. DRY RUN ──
+  if (/dry.?run|execute|simulate|run test/.test(query)) {
+    return `The **Dry-Run Simulator** lets you manually execute test cases step by step:\n\n1. Go to **Test Cases Repository** tab\n2. Click **▶️ Start Dry-Run**\n3. Mark each step as ✅ Passed, ❌ Failed, or 🔶 Blocked\n4. All results are saved to the SQLite database automatically\n\nWant me to walk you through any specific test case?`;
+  }
+
+  // ── 8. FORMATS ──
+  if (/format|lly tu|lly pbpa|del format|template/.test(query)) {
+    return `QAtlas supports **3 test case formats**:\n\n- **LLY TU** — Includes Test Path, Designer, Category, Step Name\n- **LLY PBPA** — Focuses on Test Summary, Steps, and Expected Result\n- **DEL** — Sequential IDs (TC001...) with Test Data and Bug ID fields\n\nSelect your format from the dropdown before generating — the entire suite adapts automatically!`;
+  }
+
+  // ── 9. FEATURE-SPECIFIC TEST CASE REQUESTS (Dynamic offline mock generator) ──
+  const mockFeature = getMockFeatureTestCases(query, format);
+  if (mockFeature) {
+    const mdList = formatMockTestCasesToMarkdown(mockFeature.cases, format);
+    const note = hasKey
+      ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI.*`
+      : `\n\n> 💡 *Tip: Connect your API key in ⚙️ Settings to generate custom suites from any user story.*`;
+    return `### Dynamic Mock Test Cases: ${mockFeature.title} (Format: **${format}**)\n\n${mdList}${note}`;
+  }
+
+  // ── 10. GENERAL TEST CASES FALLBACK ──
+  if (/test case|testcase|scenario|write test|generate test|add test/.test(query)) {
+    if (activeStory && activeStory.testCases.length > 0) {
+      const list = activeStory.testCases.slice(0, 5).map(tc => `- **${tc.customId || 'TC'} (${tc.type}):** ${tc.title}`).join('\n');
+      const extra = activeStory.testCases.length > 5 ? `\n...and ${activeStory.testCases.length - 5} more.` : '';
+      return `Here's a summary of the test suite for **"${activeStory.title}"**:\n\n${list}${extra}\n\nWant me to add more edge cases, security checks, or reformat these into a specific template?`;
+    }
+    return `I'd love to help write test cases! 📝 Here's a quick example for a **Login** feature:\n\n1. **TC001 (Positive):** Login with valid credentials → Redirected to dashboard\n2. **TC002 (Negative):** Login with wrong password → Error message shown\n3. **TC003 (Edge):** Password field with 256 characters → Handled gracefully\n4. **TC004 (Security):** Password masked in UI & encrypted in transit\n5. **TC005 (Performance):** Login response within 1.5 seconds\n\nPaste your user story in the generator to create a full custom suite!`;
+  }
+
+  // ── 11. GENERAL FALLBACK — smart, contextual, not robotic ──
+  const smartReplies = [
+    `That's a great question! Let me help you with that.`,
+    `Sure, I can help with that!`,
+    `Absolutely! Here's what I know about this topic.`,
+    `Great point — let me break this down for you.`
+  ];
+  const opener = smartReplies[Math.floor(Math.random() * smartReplies.length)];
+
+  let ctxBlock = '';
+  if (activeStory) {
+    ctxBlock = `\n\nIn the context of **"${activeStory.title}"**, I'd suggest:\n1. Verify all UI fields and buttons respond as expected.\n2. Add edge cases for boundary data inputs.\n3. Include a security test for any authentication or data submission flows.\n4. Check performance under typical and peak load conditions.`;
+  }
+
+  const apiNote = hasKey
+    ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI responses.*`
+    : `\n\n> 💡 *Add your ${providerShort} API key in ⚙️ Settings to unlock real AI-powered answers.*`;
+
+  return `${opener}\n\nYou asked: *"${raw}"*${ctxBlock}${apiNote}`;
+}
+
+// --- HELPER: GEMINI API CALL WITH FALLBACKS ---
+async function callGeminiApi(payload, apiKey) {
+  const endpoints = [
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+  ];
+
+  let lastError = null;
+  for (const url of endpoints) {
+    try {
+      console.log(`[Gemini API] Requesting endpoint: ${url.split('?')[0]}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const resText = await response.text();
+      if (response.ok) {
+        const resData = JSON.parse(resText);
+        if (resData.candidates && resData.candidates[0] && resData.candidates[0].content && resData.candidates[0].content.parts && resData.candidates[0].content.parts[0]) {
+          return resData;
+        }
+      }
+
+      console.warn(`[Gemini API Warning] Endpoint failed: ${url.split('?')[0]}. Status: ${response.status}. Response: ${resText}`);
+      if (response.status === 404) {
+        try {
+          const listUrl = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
+          const listRes = await fetch(listUrl);
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            const modelNames = listData.models ? listData.models.map(m => m.name) : [];
+            console.log(`[Gemini API Diagnostic] Available models for this key:`, modelNames);
+          } else {
+            console.warn(`[Gemini API Diagnostic] Failed to list models:`, await listRes.text());
+          }
+        } catch (listErr) {
+          console.warn(`[Gemini API Diagnostic] Error listing models:`, listErr.message);
+        }
+      }
+      lastError = new Error(`Gemini API Error: ${resText}`);
+    } catch (err) {
+      console.warn(`[Gemini API Warning] Connection failed for ${url.split('?')[0]}: ${err.message}`);
+      lastError = err;
     }
   }
-
-  // 2. Check for test case generation keywords
-  if (query.includes('test case') || query.includes('testcase') || query.includes('scenario') || query.includes('write test')) {
-    return `I'd be happy to help you write test cases! As ${providerLabel} running in offline mode, here is a mock test suite template for a standard Login Feature:
-
-1. **TC001 (Positive):** Verify successful login with valid credentials (username & password).
-2. **TC002 (Negative):** Verify validation error when logging in with an invalid password.
-3. **TC003 (Edge):** Verify behavior when inputting SQL injection characters in the username field.
-4. **TC004 (Security):** Verify password field masks characters during entry.
-5. **TC005 (Performance):** Verify login responds within 1.5 seconds.
-
-To generate actual customized test cases from your own functional requirements, please make sure to input your User Story and Acceptance Criteria in the generator panel or upload a BRD document!`;
-  }
-
-  // 3. Check for format keywords
-  if (query.includes('format') || query.includes('dropdown') || query.includes('lly') || query.includes('del')) {
-    return `QAtlas supports three specialized test case formats which you can select from the dropdown before generating: 
-- **LLY TU:** Includes detailed fields like Test Path, Designer, Category, and Step Name.
-- **LLY PBPA:** Focuses on Test Summary, Steps to be followed, and Expected Result.
-- **DEL:** Uses sequential IDs (TC001, TC002...) and includes Test Data and Bug ID fields.
-
-Simply select the format in the sidebar dropdown (for documents) or the generator form (for user stories) and I will structure the generated suites accordingly!`;
-  }
-
-  // 4. Check for export/jira keywords
-  if (query.includes('jira') || query.includes('export') || query.includes('csv') || query.includes('json')) {
-    return `You can easily export your generated test suites to Jira! Navigate to the **Test Cases Repository** tab, click **💼 Jira Export** to copy the description table markdown, or click **Export JSON/CSV** to download files ready to import. Let me know if you need help formatting them!`;
-  }
-
-  // 5. Check for dry run keywords
-  if (query.includes('dry run') || query.includes('run') || query.includes('execute') || query.includes('simulator')) {
-    return `The Dry-Run Simulator lets you manually execute test cases step-by-step. Go to the **Test Cases Repository** tab, click **▶️ Start Dry-Run**, and you can mark each step or case as Passed, Failed, or Blocked. All execution results and logs will be saved directly into the SQLite database!`;
-  }
-
-  // 6. Default response
-  return `I understand you are asking about: "${content}". 
-
-I am currently running in offline mock mode as **${providerLabel}**. 
-
-To get an active, highly accurate, and intelligent response connected directly to the real model API, please paste your API Key for **${providerLabel}** into the settings panel (⚙️ Settings button in the bottom-left corner of the console). Once configured, I can provide real-time custom answers for anything you ask!`;
+  throw lastError || new Error("Failed to get response from Gemini API after trying all endpoints.");
 }
 
 // --- HELPER: GEMINI CHAT COMPLETION ---
-async function getGeminiChatResponse(chatId, newContent, apiKey) {
+async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Default') {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
@@ -487,27 +1000,20 @@ async function getGeminiChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return generateDynamicMockChatResponse('gemini', newContent);
+    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, false, format);
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API Error: ${errText}`);
+  try {
+    const resData = await callGeminiApi({ contents }, apiKey);
+    return resData.candidates[0].content.parts[0].text;
+  } catch (err) {
+    console.warn('[Gemini] API failed, falling back to mock mode:', err.message);
+    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, true, format);
   }
-
-  const resData = await response.json();
-  return resData.candidates[0].content.parts[0].text;
 }
 
 // --- HELPER: OPENAI/CHATGPT CHAT COMPLETION ---
-async function getOpenAiChatResponse(chatId, newContent, apiKey) {
+async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Default') {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
@@ -524,33 +1030,38 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return generateDynamicMockChatResponse('chatgpt', newContent);
+    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, false, format);
   }
 
-  const url = 'https://api.openai.com/v1/chat/completions';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages
-    })
-  });
+  try {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages
+      })
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI API Error: ${errText}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OpenAI API Error: ${errText}`);
+    }
+
+    const resData = await response.json();
+    return resData.choices[0].message.content;
+  } catch (err) {
+    console.warn('[ChatGPT] API failed, falling back to mock mode:', err.message);
+    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, true, format);
   }
-
-  const resData = await response.json();
-  return resData.choices[0].message.content;
 }
 
 // --- HELPER: COPILOT CHAT COMPLETION ---
-async function getCopilotChatResponse(chatId, newContent, apiKey) {
+async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Default') {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
@@ -567,29 +1078,34 @@ async function getCopilotChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return generateDynamicMockChatResponse('copilot', newContent);
+    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, false, format);
   }
 
-  const url = 'https://api.openai.com/v1/chat/completions';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages
-    })
-  });
+  try {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages
+      })
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Copilot API Error: ${errText}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Copilot API Error: ${errText}`);
+    }
+
+    const resData = await response.json();
+    return resData.choices[0].message.content;
+  } catch (err) {
+    console.warn('[Copilot] API failed, falling back to mock mode:', err.message);
+    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, true, format);
   }
-
-  const resData = await response.json();
-  return resData.choices[0].message.content;
 }
 
 // --- HELPER: COPILOT TEST CASES GENERATOR ---
@@ -681,7 +1197,7 @@ async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, 
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: promptText }],
       response_format: { type: 'json_object' }
     })
@@ -814,16 +1330,21 @@ Generate only the optimal number of test cases across all necessary types (Posit
 
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
-**CRITICAL QUALITY INSTRUCTIONS:**
+**CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
 1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title/description must be clear and descriptive of the exact condition. Do NOT use placeholder text or generic titles.
-4. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-5. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps.
+3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
+4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
+5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
+6. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
+7. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
-**Formatting Guidelines:**
+**Strict Formatting & Speed Optimization Guidelines:**
 ${formatInst}
-Return ONLY a valid JSON object matching the schema. Do not include markdown code block syntax (like \`\`\`json) or any conversational text.
+Return ONLY a valid, raw JSON object matching the schema. To optimize response speed and ensure successful parsing:
+- Do NOT include any introductory or concluding text, explanations, or notes.
+- Do NOT wrap the JSON block in markdown code block ticks (\`\`\`json or \`\`\`).
+- Output the raw JSON directly as a single object.
 `;
 }
 
@@ -934,8 +1455,8 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
   });
 }
 
-// --- HELPER: CLAUDE CHAT COMPLETION ---
-async function getClaudeChatResponse(chatId, newContent, apiKey) {
+// --- HELPER: CLAUDE CHAT COMPLETION (with model fallback chain) ---
+async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Default') {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
@@ -952,31 +1473,51 @@ async function getClaudeChatResponse(chatId, newContent, apiKey) {
   });
 
   if (!apiKey) {
-    return generateDynamicMockChatResponse('claude', newContent);
+    return await generateDynamicMockChatResponse(chatId, 'claude', newContent, false, format);
   }
+
+  const claudeModels = [
+    'claude-opus-4-5',
+    'claude-opus-4-20250514',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-latest'
+  ];
 
   const url = 'https://api.anthropic.com/v1/messages';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
-      messages
-    })
-  });
+  let lastErr = null;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Claude API Error: ${errText}`);
+  for (const model of claudeModels) {
+    try {
+      console.log(`[Claude] Trying model: ${model}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({ model, max_tokens: 2000, messages })
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        return resData.content[0].text;
+      }
+
+      const errText = await response.text();
+      console.warn(`[Claude] Model ${model} failed (${response.status}): ${errText}`);
+      lastErr = new Error(errText);
+
+      // Only try next model for 404 (not found) or 400 (bad model)
+      if (response.status !== 404 && response.status !== 400) break;
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[Claude] Model ${model} threw error:`, err.message);
+    }
   }
 
-  const resData = await response.json();
-  return resData.content[0].text;
+  console.warn('[Claude] All models failed, falling back to mock mode.');
+  return await generateDynamicMockChatResponse(chatId, 'claude', newContent, true, format);
 }
 
 // --- HELPER: CLAUDE TEST CASES GENERATOR ---
@@ -992,7 +1533,7 @@ async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, 
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-opus-4-5',
       max_tokens: 4000,
       messages: [{ role: 'user', content: promptText }]
     })
@@ -1040,7 +1581,10 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
     const { chatId } = req.params;
     const { role, content, title, userId = 'default-user' } = req.body;
     const provider = req.headers['x-provider'] || 'gemini';
+    const format = req.headers['x-format'] || 'Default';
     const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : provider === 'chatgpt' ? process.env.OPENAI_API_KEY : provider === 'copilot' ? process.env.COPILOT_API_KEY : process.env.GEMINI_API_KEY);
+
+    console.log(`[CHAT_MESSAGE_REQUEST] Provider: ${provider} | Format: ${format} | Has Header Key: ${!!req.headers['x-api-key']} | Resolved Key Source: ${req.headers['x-api-key'] ? 'Client Header' : 'Backend Env'} | Key Length: ${apiKey ? apiKey.length : 0}`);
 
     let chat = await prisma.chat.findUnique({ where: { id: chatId } });
     if (!chat) {
@@ -1067,13 +1611,13 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
     let aiResponseContent = '';
     try {
       if (provider === 'claude') {
-        aiResponseContent = await getClaudeChatResponse(chatId, content, apiKey);
+        aiResponseContent = await getClaudeChatResponse(chatId, content, apiKey, format);
       } else if (provider === 'chatgpt') {
-        aiResponseContent = await getOpenAiChatResponse(chatId, content, apiKey);
+        aiResponseContent = await getOpenAiChatResponse(chatId, content, apiKey, format);
       } else if (provider === 'copilot') {
-        aiResponseContent = await getCopilotChatResponse(chatId, content, apiKey);
+        aiResponseContent = await getCopilotChatResponse(chatId, content, apiKey, format);
       } else {
-        aiResponseContent = await getGeminiChatResponse(chatId, content, apiKey);
+        aiResponseContent = await getGeminiChatResponse(chatId, content, apiKey, format);
       }
     } catch (apiErr) {
       console.error(`${provider} Chat API Error:`, apiErr.message);
@@ -1323,37 +1867,16 @@ app.post('/api/user-stories', async (req, res) => {
       const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
-          })
-        });
+        const resData = await callGeminiApi({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        }, apiKey);
 
-        if (response.ok) {
-          const resData = await response.json();
-          const rawJsonText = resData.candidates[0].content.parts[0].text;
-          const parsed = JSON.parse(rawJsonText);
-          generatedRaw = parsed.testCases || [];
-        } else {
-          const errText = await response.text();
-          console.error('Gemini API failed, falling back to mock:', errText);
-          generatedRaw = generateMockTestCases(
-            userStory,
-            acceptanceCriteria,
-            positiveCount,
-            negativeCount,
-            edgeCount,
-            securityCount,
-            performanceCount,
-            format
-          );
-        }
+        const rawJsonText = resData.candidates[0].content.parts[0].text;
+        const parsed = JSON.parse(rawJsonText);
+        generatedRaw = parsed.testCases || [];
       } catch (err) {
-        console.error('Gemini connection error, falling back to mock:', err.message);
+        console.error('Gemini API failed, falling back to mock:', err.message);
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1467,14 +1990,17 @@ Tasks:
 
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
-**CRITICAL QUALITY INSTRUCTIONS:**
+**CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
 1. **Accurate BRD Mapping:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the User Story/BRD requirements.
-2. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-3. **Descriptive Titles:** Every test case title/description must be clear and descriptive of the exact condition. Do NOT use placeholder text or generic titles.
-4. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-5. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps.
+3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
+4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
+5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
+6. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
+7. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
-Response must be valid JSON matching this schema:
+**Strict Formatting & Speed Optimization Guidelines:**
+Response must be a valid, raw JSON object matching this schema:
 {
   "userStory": "string",
   "acceptanceCriteria": "string",
@@ -1483,6 +2009,11 @@ Response must be valid JSON matching this schema:
     // ${formatInst.trim().replace(/\n/g, '\n    // ')}
   ]
 }
+
+To optimize response speed and ensure successful parsing:
+- Do NOT include any introductory or concluding text, explanations, or notes.
+- Do NOT wrap the JSON block in markdown code block ticks (\`\`\`json or \`\`\`).
+- Output the raw JSON directly as a single object.
 `;
 }
 
@@ -1497,7 +2028,7 @@ async function getOpenAiTestCasesFromDoc(documentName, documentText, positiveCou
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: promptText }],
       response_format: { type: 'json_object' }
     })
@@ -1532,7 +2063,7 @@ async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCou
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-opus-4-5',
       max_tokens: 4000,
       messages: [{ role: 'user', content: promptText }]
     })
@@ -1557,22 +2088,11 @@ async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCou
 async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
   const promptText = buildDocPromptText(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { responseMimeType: 'application/json' }
-    })
-  });
+  const resData = await callGeminiApi({
+    contents: [{ parts: [{ text: promptText }] }],
+    generationConfig: { responseMimeType: 'application/json' }
+  }, apiKey);
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API Error: ${errText}`);
-  }
-
-  const resData = await response.json();
   const rawJsonText = resData.candidates[0].content.parts[0].text;
   return JSON.parse(rawJsonText);
 }
