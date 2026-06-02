@@ -1360,7 +1360,7 @@ function mapTestCaseToFormat(tc, format, index) {
       testName: tc.testName || tc.title || 'Generated Scenario',
       designer: tc.designer || 'QA Team',
       category: tc.category || 'General',
-      description: tc.description || 'Verify the scenario.',
+      description: tc.description || tc.title || tc.testName || 'Verify the scenario.',
       preconditions: tc.preconditions || 'N/A',
       stepName: tc.stepName || 'Perform Action',
       stepDescription: tc.stepDescription || tc.steps || '1. Action.',
@@ -1373,8 +1373,8 @@ function mapTestCaseToFormat(tc, format, index) {
       testSummary: tc.testSummary || tc.title || 'Generated Scenario',
       type: tc.type || 'Positive',
       preconditions: tc.preconditions || 'N/A',
-      testCaseDescription: tc.testCaseDescription || tc.description || 'Verify function.',
-      description: tc.testCaseDescription || tc.description || 'Verify function.',
+      testCaseDescription: tc.testCaseDescription || tc.description || tc.title || tc.testSummary || 'Verify function.',
+      description: tc.testCaseDescription || tc.description || tc.title || tc.testSummary || 'Verify function.',
       stepsToBeFollowed: tc.stepsToBeFollowed || tc.steps || '1. Action.',
       expectedResult: tc.expectedResult || 'Expected Result.',
       actualResult: tc.actualResult || 'N/A'
@@ -1396,7 +1396,7 @@ function mapTestCaseToFormat(tc, format, index) {
     return {
       customId: tc.customId || sequentialId,
       title: tc.title || 'Generated Scenario',
-      description: tc.description || 'Verify function.',
+      description: tc.description || tc.title || 'Verify function.',
       type: tc.type || 'Positive',
       preconditions: tc.preconditions || 'N/A',
       steps: tc.steps || '1. Action.',
@@ -1423,7 +1423,7 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
       testPath: tc.testPath || 'N/A',
       designer: tc.designer || 'QA Team',
       category: tc.category || 'N/A',
-      description: tc.description || 'N/A',
+      description: tc.description || tc.title || tc.testName || 'Verify the functional flow of this test case.',
       stepName: tc.stepName || 'N/A',
       evidenceRequired: tc.evidenceRequired || 'No'
     };
@@ -1431,8 +1431,8 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
     title = tc.testSummary || tc.title || 'Generated Scenario';
     steps = tc.stepsToBeFollowed || tc.steps || '1. Action.';
     customFieldsObj = {
-      testCaseDescription: tc.testCaseDescription || tc.description || 'N/A',
-      description: tc.testCaseDescription || tc.description || 'N/A',
+      testCaseDescription: tc.testCaseDescription || tc.description || tc.title || tc.testSummary || 'Verify the functional flow of this test case.',
+      description: tc.testCaseDescription || tc.description || tc.title || tc.testSummary || 'Verify the functional flow of this test case.',
       actualResult: tc.actualResult || 'N/A'
     };
   } else if (format === 'DEL') {
@@ -1442,7 +1442,7 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
       testData: tc.testData || 'N/A',
       actualResult: tc.actualResult || 'N/A',
       bugId: tc.bugId || 'N/A',
-      description: tc.description || tc.title || 'N/A'
+      description: tc.description || tc.title || 'Verify the functional flow of this test case.'
     };
     if (tc.status) {
       // Use status if present, otherwise default to Pending
@@ -1450,7 +1450,7 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
     }
   } else {
     customFieldsObj = {
-      description: tc.description || 'N/A'
+      description: tc.description || tc.title || 'Verify the functional flow of this test case.'
     };
   }
 
