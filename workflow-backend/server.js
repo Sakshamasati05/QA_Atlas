@@ -282,27 +282,27 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
       testCases.push({
         title: `Verify visual layout, alignment, and navigation of the ${sec}`,
         type: "Positive",
-        preconditions: `The application is loaded and user is on the main landing view.`,
-        steps: `1. Observe the ${sec}.\n2. Verify all elements (buttons, inputs) are positioned correctly according to specifications.`,
-        expectedResult: `The ${sec} renders correctly with no visual displacement or overlapping elements.`,
+        preconditions: `The application is loaded and user is on the main landing view. Browser viewport is set to 1920x1080 resolution.`,
+        steps: `1. Open the web application and navigate to the ${sec}.\n2. Observe the positioning, sizes, colors, and margins of all buttons, input fields, and labels.\n3. Validate element alignment using browser grid tools and compare against official design mockups.\n4. Use Tab key navigation to verify the keyboard focus ring indicators render correctly on all interactive elements.`,
+        expectedResult: `The ${sec} UI renders perfectly with no visual displacement, overlapping elements, or text clipping. All visual components are aligned properly, design guidelines are met, and keyboard tab focus outlines are visible.`,
         priority: "High"
       });
     } else if (i === 1 && buttons.length > 1) {
       testCases.push({
         title: `Verify that clicking the "${btn}" action triggers the expected form or redirect`,
         type: "Positive",
-        preconditions: `The ${sec} containing the "${btn}" option is open.`,
-        steps: `1. Click on the "${btn}" action element.\n2. Observe page transition or modal opening.`,
-        expectedResult: `The "${btn}" operation runs successfully, launching the appropriate interface.`,
+        preconditions: `The ${sec} containing the "${btn}" option is open and fully loaded.`,
+        steps: `1. Locate the "${btn}" interactive button on the screen.\n2. Click the "${btn}" button and verify the click animation trigger.\n3. Observe page navigation, redirection, or modal dialog opening behavior.\n4. Check the browser URL address bar to confirm the route path has updated to match target route structure.`,
+        expectedResult: `The "${btn}" operation executes immediately. The application successfully redirects the user to the target screen or launches the correct dialog modal with no delays or browser console exceptions.`,
         priority: "High"
       });
     } else {
       testCases.push({
         title: `Verify user can successfully set or input a valid "${fld}" value`,
         type: "Positive",
-        preconditions: `Form is initialized.`,
-        steps: `1. Select or type a valid value into the "${fld}" field.\n2. Save the changes.`,
-        expectedResult: `The "${fld}" value is accepted, saved, and displays correctly in the repository.`,
+        preconditions: `The data entry form is open and input fields are active.`,
+        steps: `1. Click inside the "${fld}" input element to focus.\n2. Type a valid test value (e.g., standard valid text or numeric parameters) into the field.\n3. Verify the typed characters render correctly without input lag.\n4. Click the save or submit button to persist the value.`,
+        expectedResult: `The entered value for "${fld}" is successfully accepted, passes local sanitization checks, saves to the database, and renders correctly in the records view.`,
         priority: "Medium"
       });
     }
@@ -319,18 +319,18 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
       testCases.push({
         title: `Verify field validation error when required "${fld}" is left blank`,
         type: "Negative",
-        preconditions: `Data entry form is open.`,
-        steps: `1. Leave the required "${fld}" field empty.\n2. Attempt to click "${btn}".`,
-        expectedResult: `Validation fails; error message displayed next to the "${fld}" field, and save is blocked.`,
+        preconditions: `The data entry form is open and all other fields are filled with valid parameters.`,
+        steps: `1. Click into the required "${fld}" field and clear any existing values.\n2. Fill out all remaining required fields with valid parameters.\n3. Click the "${btn}" button to submit the form.\n4. Observe validation alert messages and error border highlights on the screen.`,
+        expectedResult: `Form submission is blocked. The required "${fld}" field borders highlight in red, and an inline error message appears reading "${fld} is required". Focus is directed back to the blank input field.`,
         priority: "High"
       });
     } else {
       testCases.push({
         title: `Verify system error prevention when triggering invalid "${btn}" flow on ${sec}`,
         type: "Negative",
-        preconditions: `System state is initialized.`,
-        steps: `1. Navigate to the ${sec}.\n2. Input conflicting or invalid parameters.\n3. Click "${btn}".`,
-        expectedResult: `System handles the error gracefully, shows a validation warning, and does not throw a 500 error.`,
+        preconditions: `System state is initialized and user is authenticated.`,
+        steps: `1. Navigate to the ${sec}.\n2. Input conflicting, out-of-bounds, or invalid formatting parameters in fields.\n3. Click the "${btn}" action button.\n4. Monitor network log responses and UI notifications.`,
+        expectedResult: `The system successfully intercepts the invalid request, displays a user-friendly modal warning message, and does not crash or throw unhandled 500 server errors.`,
         priority: "Medium"
       });
     }
@@ -346,18 +346,18 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
       testCases.push({
         title: `Verify safety and input sanitization of "${fld}" with special characters`,
         type: "Edge",
-        preconditions: `Field "${fld}" is active.`,
-        steps: `1. Type special characters (e.g. !@#$%^&*()_+{}|:"<>?) and SQL script text into "${fld}".\n2. Submit the record.`,
-        expectedResult: `Input is encoded or sanitized successfully, preventing cross-site scripting (XSS) or database errors.`,
+        preconditions: `Input field "${fld}" is focused and ready to accept data.`,
+        steps: `1. Type special character payloads (e.g., !@#$%^&*()_+{}|:"<>?) and SQL scripting snippets (e.g., ' OR '1'='1) into "${fld}".\n2. Submit the record by clicking the save action.\n3. Inspect the saved record in the UI and database storage to verify character representation.`,
+        expectedResult: `Input is successfully encoded or sanitized. The system blocks SQL/XSS execution, saves the text exactly as literal string data, and does not execute scripts or trigger database exception errors.`,
         priority: "Medium"
       });
     } else {
       testCases.push({
         title: `Verify ${sec} behavior during a sudden network disconnection`,
         type: "Edge",
-        preconditions: `User is actively working on the ${sec}.`,
-        steps: `1. Disable the network connection.\n2. Click any action link or try saving.`,
-        expectedResult: `Application displays a friendly offline banner/warning and caches data or prompts user to reconnect.`,
+        preconditions: `User is logged in and actively editing data fields in the ${sec} form.`,
+        steps: `1. Disconnect the system network adapter or toggle offline mode in browser developer tools.\n2. Input data into empty fields.\n3. Click the save action.\n4. Observe system response and network request statuses.`,
+        expectedResult: `The application displays an offline connection warning banner, temporarily caches the entered data in local storage, and prompts the user to reconnect without losing current edits.`,
         priority: "Medium"
       });
     }
@@ -373,18 +373,18 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
       testCases.push({
         title: `Verify unauthorized access prevention to ${sec} data endpoints`,
         type: "Security",
-        preconditions: `User is logged out or lacks necessary role permissions.`,
-        steps: `1. Send a direct API request to fetch or manipulate ${sec} data.`,
-        expectedResult: `Server blocks the request with HTTP 401 Unauthorized or HTTP 403 Forbidden.`,
+        preconditions: `User is logged out, has an expired session token, or lacks the necessary administrative permissions.`,
+        steps: `1. Attempt to access the direct URL route for ${sec} data.\n2. Execute a direct API request (GET/POST) targeting the ${sec} endpoints without an active session header.`,
+        expectedResult: `The server immediately blocks access, returning an HTTP 401 Unauthorized or HTTP 403 Forbidden response. The user is redirected to the login page.`,
         priority: "High"
       });
     } else {
       testCases.push({
         title: `Verify sensitive session details are masked when clicking "${btn}"`,
         type: "Security",
-        preconditions: `User is logged in.`,
-        steps: `1. Click "${btn}".\n2. Inspect browser query params and local storage.`,
-        expectedResult: `No plain credentials or sensitive session tokens are leaked in URL patterns.`,
+        preconditions: `User is logged in with an active secure session.`,
+        steps: `1. Click the "${btn}" action button.\n2. Inspect the browser address bar query parameters, browser history logs, and console local storage parameters.`,
+        expectedResult: `No plain credentials, API keys, or sensitive session tokens are leaked in the URL pattern or history. All token handshakes are completed securely via payload headers.`,
         priority: "High"
       });
     }
@@ -397,9 +397,9 @@ function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, neg
     testCases.push({
       title: `Verify loading speed of ${sec} remains under SLA limits`,
       type: "Performance",
-      preconditions: `Database is populated with test data records.`,
-      steps: `1. Navigate to the ${sec} and trigger load.\n2. Measure API response and screen paint timing.`,
-      expectedResult: `Data loads and UI fully renders in less than 1.5 seconds.`,
+      preconditions: `Database is pre-populated with standard test dataset load (e.g., 1000+ records). Network link latency is normalized.`,
+      steps: `1. Open browser developer console network tab.\n2. Navigate to the ${sec} to trigger list load.\n3. Measure Time to First Byte (TTFB), total payload load, and Lighthouse visual page paint speeds.`,
+      expectedResult: `The server returns the query dataset in under 500ms, and the page completes total DOM visual paint in less than 1.5 seconds under concurrent simulation load.`,
       priority: "Medium"
     });
     pfIdx++;
@@ -982,6 +982,9 @@ async function callGeminiApi(payload, apiKey) {
   throw lastError || new Error("Failed to get response from Gemini API after trying all endpoints.");
 }
 
+// --- GLOBAL CHATBOT SYSTEM PROMPT ---
+const CHATBOT_SYSTEM_PROMPT = "You are QAtlas, a world-class QA Automation Engineer. You write extremely detailed, comprehensive, deep, and verified test cases. Always use Boundary Value Analysis (BVA) and Equivalence Partitioning (EP) to identify edge cases, and detail all preconditions, steps, expected results, and descriptions comprehensively. Make sure every scenario is logically sound, specific, and technically detailed. Do not use generic placeholders like 'Perform actions' or 'Verify details' — write specific navigation steps and concrete input values.";
+
 // --- HELPER: GEMINI CHAT COMPLETION ---
 async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Default') {
   const previousMessages = await prisma.message.findMany({
@@ -1004,7 +1007,10 @@ async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Defau
   }
 
   try {
-    const resData = await callGeminiApi({ contents }, apiKey);
+    const resData = await callGeminiApi({
+      contents,
+      systemInstruction: { parts: [{ text: CHATBOT_SYSTEM_PROMPT }] }
+    }, apiKey);
     return resData.candidates[0].content.parts[0].text;
   } catch (err) {
     console.warn('[Gemini] API failed, falling back to mock mode:', err.message);
@@ -1019,10 +1025,16 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Defau
     orderBy: { timestamp: 'asc' }
   });
 
-  const messages = previousMessages.map(msg => ({
-    role: msg.role === 'user' ? 'user' : 'assistant',
-    content: msg.content
-  }));
+  const messages = [
+    { role: 'system', content: CHATBOT_SYSTEM_PROMPT }
+  ];
+
+  previousMessages.forEach(msg => {
+    messages.push({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    });
+  });
 
   messages.push({
     role: 'user',
@@ -1067,10 +1079,16 @@ async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Defa
     orderBy: { timestamp: 'asc' }
   });
 
-  const messages = previousMessages.map(msg => ({
-    role: msg.role === 'user' ? 'user' : 'assistant',
-    content: msg.content
-  }));
+  const messages = [
+    { role: 'system', content: CHATBOT_SYSTEM_PROMPT }
+  ];
+
+  previousMessages.forEach(msg => {
+    messages.push({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    });
+  });
 
   messages.push({
     role: 'user',
@@ -1512,7 +1530,7 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01'
         },
-        body: JSON.stringify({ model, max_tokens: 2000, messages })
+        body: JSON.stringify({ model, max_tokens: 2000, system: CHATBOT_SYSTEM_PROMPT, messages })
       });
 
       if (response.ok) {
