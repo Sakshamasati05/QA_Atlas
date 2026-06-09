@@ -249,6 +249,12 @@ export default function ChatAssistant() {
           userId
         });
         
+        // Clear uploaded files & context
+        setUploadedFiles([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+
         // Refresh sidebar and story list
         await fetchChats();
         await fetchPastStories();
@@ -338,6 +344,12 @@ export default function ChatAssistant() {
           description: data.userStory,
           userId
         });
+
+        // Clear uploaded files & context
+        setUploadedFiles([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
 
         // Refresh lists
         await fetchChats();
