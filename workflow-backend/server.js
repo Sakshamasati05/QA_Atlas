@@ -1260,7 +1260,8 @@ Return a JSON object with this EXACT schema:
       "stepName": "string (name of this test step, e.g. Input credentials)",
       "stepDescription": "string (detailed step actions, e.g. 1. Type email\\n2. Type password)",
       "expectedResult": "string (expected result)",
-      "evidenceRequired": "string (Yes or No)"
+      "evidenceRequired": "string (Yes or No)",
+      "priority": "string (High, Medium, or Low)"
     }
   ]
 }
@@ -1279,7 +1280,8 @@ Return a JSON object with this EXACT schema:
       "testCaseDescription": "string (detailed Test case description)",
       "stepsToBeFollowed": "string (Steps to be followed)",
       "expectedResult": "string (expected result)",
-      "actualResult": "string (leave blank or use N/A)"
+      "actualResult": "string (leave blank or use N/A)",
+      "priority": "string (High, Medium, or Low)"
     }
   ]
 }
@@ -1300,7 +1302,8 @@ Return a JSON object with this EXACT schema:
       "expectedResult": "string (Expected Result)",
       "actualResult": "string (leave blank or use N/A)",
       "status": "string (default: Pending)",
-      "bugId": "string (leave blank or use N/A)"
+      "bugId": "string (leave blank or use N/A)",
+      "priority": "string (High, Medium, or Low)"
     }
   ]
 }
@@ -1385,7 +1388,8 @@ function mapTestCaseToFormat(tc, format, index) {
       stepName: tc.stepName || 'Perform Action',
       stepDescription: tc.stepDescription || tc.steps || '1. Action.',
       expectedResult: tc.expectedResult || 'Expected Result.',
-      evidenceRequired: tc.evidenceRequired || 'No'
+      evidenceRequired: tc.evidenceRequired || 'No',
+      priority: tc.priority || 'Medium'
     };
   } else if (format === 'LLY PBPA') {
     return {
@@ -1397,7 +1401,8 @@ function mapTestCaseToFormat(tc, format, index) {
       description: tc.testCaseDescription || tc.description || tc.title || tc.testSummary || 'Verify function.',
       stepsToBeFollowed: tc.stepsToBeFollowed || tc.steps || '1. Action.',
       expectedResult: tc.expectedResult || 'Expected Result.',
-      actualResult: tc.actualResult || 'N/A'
+      actualResult: tc.actualResult || 'N/A',
+      priority: tc.priority || 'Medium'
     };
   } else if (format === 'DEL') {
     return {
@@ -1410,7 +1415,8 @@ function mapTestCaseToFormat(tc, format, index) {
       expectedResult: tc.expectedResult || 'Expected Result.',
       actualResult: tc.actualResult || 'N/A',
       status: tc.status || 'Pending',
-      bugId: tc.bugId || 'N/A'
+      bugId: tc.bugId || 'N/A',
+      priority: tc.priority || 'Medium'
     };
   } else {
     return {
