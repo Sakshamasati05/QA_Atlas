@@ -2048,55 +2048,64 @@ export default function ChatAssistant() {
               </select>
             </div>
 
-            <div className="form-group">
-              <label>Gemini API Key (Free Tier Available)</label>
-              <input
-                type="password"
-                className="sidebar-input"
-                value={tempGeminiKey}
-                onChange={(e) => setTempGeminiKey(e.target.value)}
-                placeholder={geminiKey ? "••••••••••••••••" : "Paste Gemini API Key here..."}
-              />
-              <span className="upload-hint" style={{ marginTop: '4px', display: 'block' }}>
-                Create a 100% free developer key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a>.
-              </span>
-            </div>
+            {tempProvider === 'gemini' && (
+              <div className="form-group">
+                <label>Gemini API Key (Free Tier Available)</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempGeminiKey}
+                  onChange={(e) => setTempGeminiKey(e.target.value)}
+                  placeholder={geminiKey ? "••••••••••••••••" : "Paste Gemini API Key here..."}
+                />
+                <span className="upload-hint" style={{ marginTop: '4px', display: 'block' }}>
+                  Create a 100% free developer key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a>.
+                </span>
+              </div>
+            )}
 
-            <div className="form-group">
-              <label>Claude API Key</label>
-              <input
-                type="password"
-                className="sidebar-input"
-                value={tempClaudeKey}
-                onChange={(e) => setTempClaudeKey(e.target.value)}
-                placeholder={claudeKey ? "••••••••••••••••" : "Paste Claude API Key here..."}
-              />
-            </div>
+            {tempProvider === 'claude' && (
+              <div className="form-group">
+                <label>Claude API Key</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempClaudeKey}
+                  onChange={(e) => setTempClaudeKey(e.target.value)}
+                  placeholder={claudeKey ? "••••••••••••••••" : "Paste Claude API Key here..."}
+                />
+              </div>
+            )}
 
-            <div className="form-group">
-              <label>OpenAI/ChatGPT API Key</label>
-              <input
-                type="password"
-                className="sidebar-input"
-                value={tempOpenaiKey}
-                onChange={(e) => setTempOpenaiKey(e.target.value)}
-                placeholder={openaiKey ? "••••••••••••••••" : "Paste OpenAI API Key here..."}
-              />
-            </div>
+            {tempProvider === 'chatgpt' && (
+              <div className="form-group">
+                <label>OpenAI/ChatGPT API Key</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempOpenaiKey}
+                  onChange={(e) => setTempOpenaiKey(e.target.value)}
+                  placeholder={openaiKey ? "••••••••••••••••" : "Paste OpenAI API Key here..."}
+                />
+              </div>
+            )}
 
-            <div className="form-group">
-              <label>Copilot API Key</label>
-              <input
-                type="password"
-                className="sidebar-input"
-                value={tempCopilotKey}
-                onChange={(e) => setTempCopilotKey(e.target.value)}
-                placeholder={copilotKey ? "••••••••••••••••" : "Paste Copilot API Key here..."}
-              />
-              <span className="upload-hint" style={{ marginTop: '2px' }}>
-                Keys are saved locally in your browser. If a key is missing for your selected provider, QAtlas falls back to the advanced heuristic mock generator.
-              </span>
-            </div>
+            {tempProvider === 'copilot' && (
+              <div className="form-group">
+                <label>Copilot API Key</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempCopilotKey}
+                  onChange={(e) => setTempCopilotKey(e.target.value)}
+                  placeholder={copilotKey ? "••••••••••••••••" : "Paste Copilot API Key here..."}
+                />
+              </div>
+            )}
+
+            <span className="upload-hint" style={{ marginTop: '12px', display: 'block', marginBottom: '8px' }}>
+              Keys are saved locally in your browser. If a key is missing for your selected provider, QAtlas falls back to the advanced heuristic mock generator.
+            </span>
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setIsSettingsOpen(false)}>
