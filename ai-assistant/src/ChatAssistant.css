@@ -32,6 +32,7 @@
 }
 
 .dark-theme {
+  color-scheme: dark;
   --bg-app: #080c14;
   --bg-sidebar: #0f1626;
   --bg-card: rgba(17, 25, 40, 0.65);
@@ -60,6 +61,11 @@
   
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+select option {
+  background-color: var(--bg-sidebar);
+  color: var(--text-main);
 }
 
 * {
