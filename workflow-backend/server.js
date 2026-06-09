@@ -1161,7 +1161,8 @@ async function getCopilotTestCases(userStory, acceptanceCriteria, positiveCount,
     jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
   }
   
-  return JSON.parse(jsonString);
+  const parsed = JSON.parse(jsonString);
+  return parsed.testCases || [];
 }
 
 // --- HELPER: COPILOT GENERATION FROM DOCUMENTS ---
@@ -1199,7 +1200,8 @@ async function getCopilotTestCasesFromDoc(documentName, documentText, positiveCo
     jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
   }
   
-  return JSON.parse(jsonString);
+  const parsed = JSON.parse(jsonString);
+  return parsed.testCases || [];
 }
 
 
@@ -1728,6 +1730,8 @@ app.post('/api/user-stories', async (req, res) => {
     if (!userStory && !acceptanceCriteria) {
       return res.status(400).json({ error: 'User Story or Acceptance Criteria is required.' });
     }
+
+    console.log(`[USER_STORY_REQUEST] Story Length: ${userStory ? userStory.length : 0} | AC Length: ${acceptanceCriteria ? acceptanceCriteria.length : 0} | Format: ${format} | Provider: ${req.headers['x-provider'] || 'gemini'}`);
 
     const title = userStory.substring(0, 50) || 'Untitled User Story';
     const cleanStory = (userStory || '').toLowerCase().trim();

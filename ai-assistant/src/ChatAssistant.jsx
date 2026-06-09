@@ -457,7 +457,7 @@ export default function ChatAssistant() {
   // --- Test Case In-place Editing & CRUD ---
   const handleEditClick = (tc) => {
     setEditingTcId(tc.id);
-    setEditingTcData({ ...tc });
+    setEditingTcData({ ...tc, format: format });
   };
 
   const handleEditSave = async () => {
@@ -601,9 +601,6 @@ export default function ChatAssistant() {
   };
 
   const getJiraMarkdown = () => {
-    const firstTc = testCases[0] || {};
-    const format = firstTc.format || 'Default';
-
     if (format === 'LLY TU') {
       let md = `||Test Case ID||Test Path||Type||Test Name||Designer||Category||Description||Step Name||Step Description||Expected Result||Evidence Required||Status||\n`;
       testCases.forEach(tc => {
@@ -785,28 +782,79 @@ export default function ChatAssistant() {
   };
 
   // --- Export File ---
-  const handleExport = (format) => {
+  const handleExport = (exportType) => {
     if (testCases.length === 0) return;
     let content = '';
     let mimeType = 'text/plain';
     let filename = `QAtlas_TestCases_${activeStory?.id || 'export'}`;
 
-    if (format === 'json') {
+    if (exportType === 'json') {
       content = JSON.stringify(testCases, null, 2);
       mimeType = 'application/json';
       filename += '.json';
     } else {
       // Export as CSV
-      const headers = ['ID', 'Title', 'Type', 'Preconditions', 'Steps', 'ExpectedResult', 'Priority'];
-      const rows = testCases.map(tc => [
-        tc.id,
-        `"${tc.title.replace(/"/g, '""')}"`,
-        tc.type,
-        `"${(tc.preconditions || '').replace(/"/g, '""')}"`,
-        `"${(tc.steps || '').replace(/\n/g, '\\n').replace(/"/g, '""')}"`,
-        `"${(tc.expectedResult || '').replace(/"/g, '""')}"`,
-        tc.priority
-      ]);
+      let headers = [];
+      let rows = [];
+
+      if (format === 'LLY TU') {
+        headers = ['Test Case ID', 'Test Path', 'Type', 'Test Name', 'Designer', 'Category', 'Description', 'Preconditions', 'Step Name', 'Step Description', 'Expected Result', 'Evidence Required', 'Status'];
+        rows = testCases.map(tc => [
+          tc.customId || tc.id,
+          `"${(getCustomField(tc, 'testPath') || '/DefaultPath/Section').replace(/"/g, '""')}"`,
+          tc.type || 'Positive',
+          `"${(tc.title || 'Generated Scenario').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'designer') || 'QA Team').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'category') || 'General').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'description') || tc.title || '').replace(/"/g, '""')}"`,
+          `"${(tc.preconditions || 'N/A').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'stepName') || 'Perform Action').replace(/"/g, '""')}"`,
+          `"${(tc.steps || '').replace(/\n/g, '\\n').replace(/"/g, '""')}"`,
+          `"${(tc.expectedResult || '').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'evidenceRequired') || 'No').replace(/"/g, '""')}"`,
+          tc.executionStatus || 'Pending'
+        ]);
+      } else if (format === 'LLY PBPA') {
+        headers = ['Test Case ID', 'Test Summary', 'Test Case Description', 'Preconditions', 'Steps to be Followed', 'Expected Result', 'Actual Result', 'Status'];
+        rows = testCases.map(tc => [
+          tc.customId || tc.id,
+          `"${(tc.title || 'Generated Scenario').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title || '').replace(/"/g, '""')}"`,
+          `"${(tc.preconditions || 'N/A').replace(/"/g, '""')}"`,
+          `"${(tc.steps || '').replace(/\n/g, '\\n').replace(/"/g, '""')}"`,
+          `"${(tc.expectedResult || '').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'actualResult') || 'N/A').replace(/"/g, '""')}"`,
+          tc.executionStatus || 'Pending'
+        ]);
+      } else if (format === 'DEL') {
+        headers = ['Test Case Id', 'Description', 'Type', 'Preconditions', 'Test Data', 'Test Steps', 'Expected Result', 'Actual Result', 'Status', 'Bug ID'];
+        rows = testCases.map(tc => [
+          tc.customId || tc.id,
+          `"${(tc.title || 'Generated Scenario').replace(/"/g, '""')}"`,
+          tc.type || 'Positive',
+          `"${(tc.preconditions || 'N/A').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'testData') || 'Valid credentials').replace(/"/g, '""')}"`,
+          `"${(tc.steps || '').replace(/\n/g, '\\n').replace(/"/g, '""')}"`,
+          `"${(tc.expectedResult || '').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'actualResult') || 'N/A').replace(/"/g, '""')}"`,
+          tc.executionStatus || 'Pending',
+          `"${(getCustomField(tc, 'bugId') || 'N/A').replace(/"/g, '""')}"`
+        ]);
+      } else {
+        headers = ['Test Case ID', 'Type', 'Title', 'Description', 'Preconditions', 'Steps', 'Expected Result', 'Priority', 'Status'];
+        rows = testCases.map(tc => [
+          tc.customId || tc.id,
+          tc.type,
+          `"${(tc.title || '').replace(/"/g, '""')}"`,
+          `"${(getCustomField(tc, 'description') || tc.title || 'Verify the scenario.').replace(/"/g, '""')}"`,
+          `"${(tc.preconditions || 'N/A').replace(/"/g, '""')}"`,
+          `"${(tc.steps || '').replace(/\n/g, '\\n').replace(/"/g, '""')}"`,
+          `"${(tc.expectedResult || '').replace(/"/g, '""')}"`,
+          tc.priority || 'Medium',
+          tc.executionStatus || 'Pending'
+        ]);
+      }
+
       content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       mimeType = 'text/csv';
       filename += '.csv';
@@ -1495,23 +1543,23 @@ export default function ChatAssistant() {
                           </div>
                         ) : (
                           <div className="tc-details">
-                            {tc.format === 'LLY TU' ? (
+                            {format === 'LLY TU' ? (
                               <>
                                 <div className="detail-row">
                                   <span className="detail-label">Test Path</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testPath')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testPath') || '/DefaultPath/Section'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Designer</span>
-                                  <span className="detail-value">{getCustomField(tc, 'designer')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'designer') || 'QA Team'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Category</span>
-                                  <span className="detail-value">{getCustomField(tc, 'category')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'category') || 'General'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'description')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Preconditions</span>
@@ -1519,7 +1567,7 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Step Name</span>
-                                  <span className="detail-value">{getCustomField(tc, 'stepName')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'stepName') || 'Perform Action'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Step Description</span>
@@ -1531,10 +1579,10 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Evidence Required</span>
-                                  <span className="detail-value">{getCustomField(tc, 'evidenceRequired')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'evidenceRequired') || 'No'}</span>
                                 </div>
                               </>
-                            ) : tc.format === 'LLY PBPA' ? (
+                            ) : format === 'LLY PBPA' ? (
                               <>
                                 <div className="detail-row">
                                   <span className="detail-label">Test Summary</span>
@@ -1542,7 +1590,7 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Test Case Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testCaseDescription')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title || 'Verify function.'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Preconditions</span>
@@ -1558,10 +1606,10 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Actual Result</span>
-                                  <span className="detail-value">{getCustomField(tc, 'actualResult')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
                                 </div>
                               </>
-                            ) : tc.format === 'DEL' ? (
+                            ) : format === 'DEL' ? (
                               <>
                                 <div className="detail-row">
                                   <span className="detail-label">Description</span>
@@ -1573,7 +1621,7 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Test Data</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testData')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'testData') || 'Valid credentials'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Test Steps</span>
@@ -1585,18 +1633,18 @@ export default function ChatAssistant() {
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Actual Result</span>
-                                  <span className="detail-value">{getCustomField(tc, 'actualResult')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
                                 </div>
                                 <div className="detail-row">
                                   <span className="detail-label">Bug ID</span>
-                                  <span className="detail-value">{getCustomField(tc, 'bugId')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'bugId') || 'N/A'}</span>
                                 </div>
                               </>
                             ) : (
                               <>
                                 <div className="detail-row">
                                   <span className="detail-label">Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'description')}</span>
+                                  <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
                                 </div>
                                 {tc.preconditions && tc.preconditions !== 'N/A' && (
                                   <div className="detail-row">
