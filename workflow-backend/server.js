@@ -209,200 +209,130 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
 });
 
 // --- HELPER: MOCK TEST CASES GENERATOR (FALLBACK) ---
-function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
-  const cleanStory = (userStory || '').toLowerCase();
-  const cleanAc = (acceptanceCriteria || '').toLowerCase();
-  const combinedText = cleanStory + ' ' + cleanAc;
+function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default', docContext = '') {
+  const rawLines = [];
+  if (acceptanceCriteria) rawLines.push(...acceptanceCriteria.split('\n'));
+  if (userStory) rawLines.push(...userStory.slice(0, 10000).split('\n'));
+  if (docContext) rawLines.push(...docContext.slice(0, 10000).split('\n'));
 
-  // Heuristic extraction
-  const buttonKeywords = ['button', 'click', 'select', 'press', 'add', 'create', 'edit', 'delete', 'copy', 'save', 'clear'];
-  const extractedButtons = [];
-  buttonKeywords.forEach(keyword => {
-    if (combinedText.includes(keyword)) {
-      // Find what follows or precedes the keyword
-      const regex = new RegExp(`(?:${keyword})\\s+(?:on|to|for|a|new)?\\s*['"“]?([a-zA-Z0-9_-]{3,15})['"”]?`, 'g');
-      let match;
-      while ((match = regex.exec(combinedText)) !== null) {
-        if (match[1] && !buttonKeywords.includes(match[1])) {
-          extractedButtons.push(match[1].trim());
-        }
-      }
-      extractedButtons.push(keyword);
-    }
-  });
-  const buttons = [...new Set(extractedButtons)].slice(0, 6);
+  // Clean lines to extract potential requirements / acceptance criteria rules
+  const rules = rawLines
+    .map(line => line.trim())
+    .map(line => line.replace(/^[-*+\d\.\)\s]+/, '')) // remove list bullet prefixes
+    .map(line => line.replace(/^\[AC\d+\]\s*/i, '')) // remove existing AC tags
+    .filter(line => line.length > 12)
+    .filter(line => {
+      const lower = line.toLowerCase();
+      return !lower.startsWith('as a') && !lower.startsWith('i want to') && !lower.startsWith('so that') && 
+             !lower.includes('user story') && !lower.includes('acceptance criteria') && 
+             !lower.includes('generate mock') && !lower.includes('test cases');
+    });
 
-  const sectionKeywords = ['section', 'panel', 'sidebar', 'table', 'grid', 'page', 'form', 'view', 'header', 'footer'];
-  const extractedSections = [];
-  sectionKeywords.forEach(keyword => {
-    if (combinedText.includes(keyword)) {
-      const regex = new RegExp(`([a-zA-Z0-9_-]{3,15})\\s+(?:${keyword})`, 'g');
-      let match;
-      while ((match = regex.exec(combinedText)) !== null) {
-        if (match[1] && !sectionKeywords.includes(match[1])) {
-          extractedSections.push(match[1].trim() + ' ' + keyword);
-        }
-      }
-      extractedSections.push(keyword);
-    }
-  });
-  const sections = [...new Set(extractedSections)].slice(0, 6);
+  // Unique rules
+  const uniqueRules = [...new Set(rules)];
 
-  const fieldKeywords = ['input', 'enter', 'field', 'drop down', 'dropdown', 'value', 'text', 'image', 'barcode', 'date', 'status'];
-  const extractedFields = [];
-  fieldKeywords.forEach(keyword => {
-    if (combinedText.includes(keyword)) {
-      const regex = new RegExp(`(?:${keyword})\\s+(?:of|for|name|with)?\\s*['"“]?([a-zA-Z0-9_-]{3,15})['"”]?`, 'g');
-      let match;
-      while ((match = regex.exec(combinedText)) !== null) {
-        if (match[1] && !fieldKeywords.includes(match[1])) {
-          extractedFields.push(match[1].trim());
-        }
-      }
-      extractedFields.push(keyword);
-    }
-  });
-  const fields = [...new Set(extractedFields)].slice(0, 6);
-
-  // Fallbacks if lists are empty
-  if (buttons.length === 0) buttons.push('action', 'submit');
-  if (sections.length === 0) sections.push('main dashboard', 'layout section');
-  if (fields.length === 0) fields.push('input field', 'status dropdown');
+  // If no rules could be parsed, provide logical fallbacks based on input context
+  if (uniqueRules.length === 0) {
+    const topic = (userStory || '').substring(0, 40).trim() || 'Requested Feature';
+    uniqueRules.push(
+      `user can successfully execute core operations of ${topic}`,
+      `form fields reject invalid inputs or blank submissions for ${topic}`,
+      `system preserves data integrity and authorization constraints during operations`
+    );
+  }
 
   const testCases = [];
-  let pIdx = 1, nIdx = 1, eIdx = 1, sIdx = 1, pfIdx = 1;
 
-  // Generate Positive Scenarios
+  // Helper to construct a test case structure
+  const makeTestCase = (title, type, preconditions, steps, expectedResult, priority) => {
+    return {
+      title,
+      type,
+      preconditions,
+      steps,
+      expectedResult,
+      priority
+    };
+  };
+
+  // 1. Generate Positive Cases
   for (let i = 0; i < positiveCount; i++) {
-    const btn = buttons[i % buttons.length];
-    const sec = sections[i % sections.length];
-    const fld = fields[i % fields.length];
+    const rule = uniqueRules[i % uniqueRules.length];
+    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
+    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
     
-    if (i === 0) {
-      testCases.push({
-        title: `Verify visual layout, alignment, and navigation of the ${sec}`,
-        type: "Positive",
-        preconditions: `The application is loaded and user is on the main landing view. Browser viewport is set to 1920x1080 resolution.`,
-        steps: `1. Open the web application and navigate to the ${sec}.\n2. Observe the positioning, sizes, colors, and margins of all buttons, input fields, and labels.\n3. Validate element alignment using browser grid tools and compare against official design mockups.\n4. Use Tab key navigation to verify the keyboard focus ring indicators render correctly on all interactive elements.`,
-        expectedResult: `The ${sec} UI renders perfectly with no visual displacement, overlapping elements, or text clipping. All visual components are aligned properly, design guidelines are met, and keyboard tab focus outlines are visible.`,
-        priority: "High"
-      });
-    } else if (i === 1 && buttons.length > 1) {
-      testCases.push({
-        title: `Verify that clicking the "${btn}" action triggers the expected form or redirect`,
-        type: "Positive",
-        preconditions: `The ${sec} containing the "${btn}" option is open and fully loaded.`,
-        steps: `1. Locate the "${btn}" interactive button on the screen.\n2. Click the "${btn}" button and verify the click animation trigger.\n3. Observe page navigation, redirection, or modal dialog opening behavior.\n4. Check the browser URL address bar to confirm the route path has updated to match target route structure.`,
-        expectedResult: `The "${btn}" operation executes immediately. The application successfully redirects the user to the target screen or launches the correct dialog modal with no delays or browser console exceptions.`,
-        priority: "High"
-      });
-    } else {
-      testCases.push({
-        title: `Verify user can successfully set or input a valid "${fld}" value`,
-        type: "Positive",
-        preconditions: `The data entry form is open and input fields are active.`,
-        steps: `1. Click inside the "${fld}" input element to focus.\n2. Type a valid test value (e.g., standard valid text or numeric parameters) into the field.\n3. Verify the typed characters render correctly without input lag.\n4. Click the save or submit button to persist the value.`,
-        expectedResult: `The entered value for "${fld}" is successfully accepted, passes local sanitization checks, saves to the database, and renders correctly in the records view.`,
-        priority: "Medium"
-      });
-    }
-    pIdx++;
+    testCases.push(makeTestCase(
+      `Verify successful execution: ${ruleCap}`,
+      "Positive",
+      `${acTag} User is authorized and system is initialized in default state.`,
+      `1. Navigate to the target module or form section.\n2. Input valid operational parameters matching "${rule}".\n3. Trigger the submission or activation control.\n4. Verify success confirmation message.`,
+      `The operation succeeds. The system processes the request immediately and displays positive confirmation status.`,
+      i === 0 ? "High" : "Medium"
+    ));
   }
 
-  // Generate Negative Scenarios
+  // 2. Generate Negative Cases
   for (let i = 0; i < negativeCount; i++) {
-    const btn = buttons[i % buttons.length];
-    const fld = fields[i % fields.length];
-    const sec = sections[i % sections.length];
+    const rule = uniqueRules[i % uniqueRules.length];
+    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
+    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
 
-    if (i === 0) {
-      testCases.push({
-        title: `Verify field validation error when required "${fld}" is left blank`,
-        type: "Negative",
-        preconditions: `The data entry form is open and all other fields are filled with valid parameters.`,
-        steps: `1. Click into the required "${fld}" field and clear any existing values.\n2. Fill out all remaining required fields with valid parameters.\n3. Click the "${btn}" button to submit the form.\n4. Observe validation alert messages and error border highlights on the screen.`,
-        expectedResult: `Form submission is blocked. The required "${fld}" field borders highlight in red, and an inline error message appears reading "${fld} is required". Focus is directed back to the blank input field.`,
-        priority: "High"
-      });
-    } else {
-      testCases.push({
-        title: `Verify system error prevention when triggering invalid "${btn}" flow on ${sec}`,
-        type: "Negative",
-        preconditions: `System state is initialized and user is authenticated.`,
-        steps: `1. Navigate to the ${sec}.\n2. Input conflicting, out-of-bounds, or invalid formatting parameters in fields.\n3. Click the "${btn}" action button.\n4. Monitor network log responses and UI notifications.`,
-        expectedResult: `The system successfully intercepts the invalid request, displays a user-friendly modal warning message, and does not crash or throw unhandled 500 server errors.`,
-        priority: "Medium"
-      });
-    }
-    nIdx++;
+    testCases.push(makeTestCase(
+      `Verify error prevention: ${ruleCap} with invalid/blank parameters`,
+      "Negative",
+      `${acTag} User is authorized and system form is open.`,
+      `1. Focus on the required inputs or controls for "${rule}".\n2. Clear required values or enter invalid format values.\n3. Attempt to save or submit the action.\n4. Observe validation highlights and error messages.`,
+      `Submission is rejected. System displays inline validation errors, highlights affected fields in red, and prevents invalid transaction processing.`,
+      "High"
+    ));
   }
 
-  // Generate Edge Scenarios
+  // 3. Generate Edge Cases
   for (let i = 0; i < edgeCount; i++) {
-    const fld = fields[i % fields.length];
-    const sec = sections[i % sections.length];
+    const rule = uniqueRules[i % uniqueRules.length];
+    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
+    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
 
-    if (i === 0) {
-      testCases.push({
-        title: `Verify safety and input sanitization of "${fld}" with special characters`,
-        type: "Edge",
-        preconditions: `Input field "${fld}" is focused and ready to accept data.`,
-        steps: `1. Type special character payloads (e.g., !@#$%^&*()_+{}|:"<>?) and SQL scripting snippets (e.g., ' OR '1'='1) into "${fld}".\n2. Submit the record by clicking the save action.\n3. Inspect the saved record in the UI and database storage to verify character representation.`,
-        expectedResult: `Input is successfully encoded or sanitized. The system blocks SQL/XSS execution, saves the text exactly as literal string data, and does not execute scripts or trigger database exception errors.`,
-        priority: "Medium"
-      });
-    } else {
-      testCases.push({
-        title: `Verify ${sec} behavior during a sudden network disconnection`,
-        type: "Edge",
-        preconditions: `User is logged in and actively editing data fields in the ${sec} form.`,
-        steps: `1. Disconnect the system network adapter or toggle offline mode in browser developer tools.\n2. Input data into empty fields.\n3. Click the save action.\n4. Observe system response and network request statuses.`,
-        expectedResult: `The application displays an offline connection warning banner, temporarily caches the entered data in local storage, and prompts the user to reconnect without losing current edits.`,
-        priority: "Medium"
-      });
-    }
-    eIdx++;
+    testCases.push(makeTestCase(
+      `Verify edge boundary limits for: ${ruleCap}`,
+      "Edge",
+      `${acTag} Input fields for "${rule}" are active and ready.`,
+      `1. Input extreme values (e.g. maximum length limits, special characters, boundary numeric values).\n2. Submit the form.\n3. Verify database storage representation and UI output.`,
+      `The system handles the boundary parameters safely without crashes, SQL errors, or text truncation.`,
+      "Medium"
+    ));
   }
 
-  // Generate Security Scenarios
+  // 4. Generate Security Cases
   for (let i = 0; i < securityCount; i++) {
-    const sec = sections[i % sections.length];
-    const btn = buttons[i % buttons.length];
+    const rule = uniqueRules[i % uniqueRules.length];
+    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
+    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
 
-    if (i === 0) {
-      testCases.push({
-        title: `Verify unauthorized access prevention to ${sec} data endpoints`,
-        type: "Security",
-        preconditions: `User is logged out, has an expired session token, or lacks the necessary administrative permissions.`,
-        steps: `1. Attempt to access the direct URL route for ${sec} data.\n2. Execute a direct API request (GET/POST) targeting the ${sec} endpoints without an active session header.`,
-        expectedResult: `The server immediately blocks access, returning an HTTP 401 Unauthorized or HTTP 403 Forbidden response. The user is redirected to the login page.`,
-        priority: "High"
-      });
-    } else {
-      testCases.push({
-        title: `Verify sensitive session details are masked when clicking "${btn}"`,
-        type: "Security",
-        preconditions: `User is logged in with an active secure session.`,
-        steps: `1. Click the "${btn}" action button.\n2. Inspect the browser address bar query parameters, browser history logs, and console local storage parameters.`,
-        expectedResult: `No plain credentials, API keys, or sensitive session tokens are leaked in the URL pattern or history. All token handshakes are completed securely via payload headers.`,
-        priority: "High"
-      });
-    }
-    sIdx++;
+    testCases.push(makeTestCase(
+      `Verify unauthorized access constraints on: ${ruleCap}`,
+      "Security",
+      `${acTag} User session is expired, unauthenticated, or has insufficient privileges.`,
+      `1. Direct browse to the URL path or API endpoints for "${rule}".\n2. Attempt to trigger the action.\n3. Check server response.`,
+      `Access is denied immediately. Server returns 401 Unauthorized or 403 Forbidden status, redirecting user to Login page.`,
+      "High"
+    ));
   }
 
-  // Generate Performance Scenarios
+  // 5. Generate Performance Cases
   for (let i = 0; i < performanceCount; i++) {
-    const sec = sections[i % sections.length];
-    testCases.push({
-      title: `Verify loading speed of ${sec} remains under SLA limits`,
-      type: "Performance",
-      preconditions: `Database is pre-populated with standard test dataset load (e.g., 1000+ records). Network link latency is normalized.`,
-      steps: `1. Open browser developer console network tab.\n2. Navigate to the ${sec} to trigger list load.\n3. Measure Time to First Byte (TTFB), total payload load, and Lighthouse visual page paint speeds.`,
-      expectedResult: `The server returns the query dataset in under 500ms, and the page completes total DOM visual paint in less than 1.5 seconds under concurrent simulation load.`,
-      priority: "Medium"
-    });
-    pfIdx++;
+    const rule = uniqueRules[i % uniqueRules.length];
+    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
+    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
+
+    testCases.push(makeTestCase(
+      `Verify transaction speed under load for: ${ruleCap}`,
+      "Performance",
+      `${acTag} Simulated database load is active (1000+ records).`,
+      `1. Open developer tools network analyzer.\n2. Trigger the action for "${rule}".\n3. Capture response latency.`,
+      `The operation finishes in under 500ms, maintaining UI responsiveness at 60 FPS.`,
+      "Medium"
+    ));
   }
 
   return testCases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
@@ -1127,8 +1057,8 @@ async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Defa
 }
 
 // --- HELPER: COPILOT TEST CASES GENERATOR ---
-async function getCopilotTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
-  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+async function getCopilotTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext);
 
   if (!apiKey) {
     throw new Error("No Copilot API key found.");
@@ -1206,8 +1136,8 @@ async function getCopilotTestCasesFromDoc(documentName, documentText, positiveCo
 
 
 // --- HELPER: OPENAI/CHATGPT TEST CASES GENERATOR ---
-async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
-  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext);
 
   const url = 'https://api.openai.com/v1/chat/completions';
   const response = await fetch(url, {
@@ -1330,7 +1260,7 @@ Return a JSON object with this EXACT schema:
   }
 }
 
-function buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format) {
+function buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext = '') {
   const formatInst = getFormatInstructions(format);
   return `
 You are an expert QA Automation Engineer.
@@ -1342,27 +1272,38 @@ ${userStory}
 **Acceptance Criteria:**
 ${acceptanceCriteria}
 
+${docContext ? `**Uploaded Reference Document Context (PDF/DOCX/Code Specs):**\n${docContext}\n` : ''}
+
 **Required Test Cases to Generate:**
 ${customizeVolume === false ? `
-Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, or redundant test cases.
+Generate only the absolute minimum, optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, repetitive, or redundant test cases. Each scenario must provide distinct testing value.
 ` : `
-- Generate ${positiveCount} Positive test cases (type: "Positive")
-- Generate ${negativeCount} Negative test cases (type: "Negative")
-- Generate ${edgeCount} Edge test cases (type: "Edge")
-- Generate ${securityCount} Security test cases (type: "Security")
-- Generate ${performanceCount} Performance test cases (type: "Performance")
+- Generate up to ${positiveCount} Positive test cases (type: "Positive")
+- Generate up to ${negativeCount} Negative test cases (type: "Negative")
+- Generate up to ${edgeCount} Edge test cases (type: "Edge")
+- Generate up to ${securityCount} Security test cases (type: "Security")
+- Generate up to ${performanceCount} Performance test cases (type: "Performance")
+(Note: Do NOT generate redundant, generic, or filler test cases to meet these counts if the reference context does not support them. Quality and distinct coverage are paramount. If the specification only supports fewer high-value cases, output only those and skip the rest.)
 `}
 
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
 **CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
-1. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
-2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
-3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
-4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
-5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-6. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-7. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+1. **Strict Core Alignment & Realism:** Every generated test case must map directly, precisely, and exclusively to the features, rules, parameters, validation thresholds, buttons, status transitions, and data fields described in the User Story, Acceptance Criteria, and Uploaded Reference Document Context. Do NOT invent or assume any functionality, fields, components, buttons, or workflows that are not explicitly specified in the reference context.
+2. **EXCLUDED JUNK/BOILERPLATE SCENARIOS (ABSOLUTELY PROHIBITED):**
+   - Do NOT generate visual, styling, or UI-layout test cases (e.g., checking font sizes, margins, alignments, cursor pointers, mouse hovers, focus rings, responsive layouts, or button rendering colors/decorations) unless these specific UI design parameters are the core subject of the requirements.
+   - Do NOT generate generic performance/SLA test cases (e.g., verifying that page loads in under 2 seconds, TTFB checks, Lighthouse scores) unless specific performance limits are explicitly defined in the requirements.
+   - Do NOT generate standard, boilerplate security/network scenarios (e.g., standard SQL injection, generic XSS inputs, standard authentication timeouts, 500 server errors, network connection drops) unless they are explicitly defined security requirements of the feature.
+   - Do NOT generate trivial, boilerplate navigation or click-only cases (e.g., verifying that clicking a button redirects to a page or that a menu opens) unless there is custom logic, permissions, or conditional redirection mapping.
+3. **No Redundant or Split Validations:** Do NOT split identical form field validation flows into multiple test cases (e.g., do NOT generate "Verify error when field A is empty" and "Verify error when field B is empty" as separate scenarios). Group them into a single comprehensive test case: "Verify form validation errors when required fields are empty".
+4. **Concrete Test Data & Precise Verification:** Never use vague placeholders like "enter valid data". Specify precise test inputs (e.g., exact emails, specific numerical values, boundaries) and the exact expected outputs (e.g., specific error texts like "Invalid Email Address format").
+5. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
+6. **Explicit Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
+7. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
+8. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
+9. **Zero Filler Scenarios:** Quality and functional depth are paramount. If the story only warrants 2 high-value test cases, generate ONLY those 2. Never generate junk scenarios just to reach requested counts.
+10. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default. Do not make up fake AC numbers that do not correspond to the actual requirements.
+11. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
 **Strict Formatting & Speed Optimization Guidelines:**
 ${formatInst}
@@ -1563,8 +1504,8 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
 }
 
 // --- HELPER: CLAUDE TEST CASES GENERATOR ---
-async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
-  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext, apiKey) {
+  const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext);
 
   const url = 'https://api.anthropic.com/v1/messages';
   const response = await fetch(url, {
@@ -1722,6 +1663,7 @@ app.post('/api/user-stories', async (req, res) => {
     const {
       userStory,
       acceptanceCriteria,
+      docContext = '',
       positiveCount = 3,
       negativeCount = 3,
       edgeCount = 3,
@@ -1809,9 +1751,11 @@ app.post('/api/user-stories', async (req, res) => {
        provider === 'copilot' ? process.env.COPILOT_API_KEY : 
        process.env.GEMINI_API_KEY);
     let generatedRaw = [];
+    let usedMock = false;
 
     if (!apiKey) {
       console.log(`No API key for ${provider}. Using high-fidelity mock generator.`);
+      usedMock = true;
       generatedRaw = generateMockTestCases(
         userStory,
         acceptanceCriteria,
@@ -1820,7 +1764,8 @@ app.post('/api/user-stories', async (req, res) => {
         edgeCount,
         securityCount,
         performanceCount,
-        format
+        format,
+        docContext
       );
     } else if (provider === 'claude') {
       try {
@@ -1835,10 +1780,12 @@ app.post('/api/user-stories', async (req, res) => {
           existingTitles,
           customizeVolume,
           format,
+          docContext,
           apiKey
         );
       } catch (err) {
         console.error('Claude API failed, falling back to mock:', err.message);
+        usedMock = true;
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1847,7 +1794,8 @@ app.post('/api/user-stories', async (req, res) => {
           edgeCount,
           securityCount,
           performanceCount,
-          format
+          format,
+          docContext
         );
       }
     } else if (provider === 'chatgpt') {
@@ -1863,10 +1811,12 @@ app.post('/api/user-stories', async (req, res) => {
           existingTitles,
           customizeVolume,
           format,
+          docContext,
           apiKey
         );
       } catch (err) {
         console.error('OpenAI API failed, falling back to mock:', err.message);
+        usedMock = true;
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1875,7 +1825,8 @@ app.post('/api/user-stories', async (req, res) => {
           edgeCount,
           securityCount,
           performanceCount,
-          format
+          format,
+          docContext
         );
       }
     } else if (provider === 'copilot') {
@@ -1891,10 +1842,12 @@ app.post('/api/user-stories', async (req, res) => {
           existingTitles,
           customizeVolume,
           format,
+          docContext,
           apiKey
         );
       } catch (err) {
         console.error('Copilot API failed, falling back to mock:', err.message);
+        usedMock = true;
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1903,12 +1856,13 @@ app.post('/api/user-stories', async (req, res) => {
           edgeCount,
           securityCount,
           performanceCount,
-          format
+          format,
+          docContext
         );
       }
     } else {
       // Build prompt with context for Gemini
-      const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format);
+      const promptText = buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext);
 
       try {
         const resData = await callGeminiApi({
@@ -1921,6 +1875,7 @@ app.post('/api/user-stories', async (req, res) => {
         generatedRaw = parsed.testCases || [];
       } catch (err) {
         console.error('Gemini API failed, falling back to mock:', err.message);
+        usedMock = true;
         generatedRaw = generateMockTestCases(
           userStory,
           acceptanceCriteria,
@@ -1929,7 +1884,8 @@ app.post('/api/user-stories', async (req, res) => {
           edgeCount,
           securityCount,
           performanceCount,
-          format
+          format,
+          docContext
         );
       }
     }
@@ -1981,7 +1937,11 @@ app.post('/api/user-stories', async (req, res) => {
         });
       }
 
-      const aiResponseContent = `**Generated ${savedTestCases.length} Test Cases successfully.**` + 
+      let prefix = '';
+      if (usedMock) {
+        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAtlas has generated template test cases based on keyword matches. To generate accurate, custom test cases from your document, please save your API Key in Settings.\n\n`;
+      }
+      const aiResponseContent = prefix + `**Generated ${savedTestCases.length} Test Cases successfully.**` + 
         (duplicateCount > 0 ? ` (Deduplicated and skipped ${duplicateCount} duplicate scenarios)` : '') +
         `\n\n` + 
         savedTestCases.map((tc, idx) => `**[${tc.type}] ${tc.id}: ${tc.title}**\n*Preconditions:* ${tc.preconditions}\n*Steps:*\n${tc.steps}\n*Expected:* ${tc.expectedResult}\n*Priority:* ${tc.priority}`).join('\n\n');
@@ -2030,18 +1990,26 @@ ${documentText.substring(0, 10000)}
 Tasks:
 1. Extract a clear, concise User Story summarizing the primary features described in the document (format as: "As a..., I want to..., so that...").
 2. Extract the Acceptance Criteria (list at least 3-5 criteria, newline separated).
-3. ${customizeVolume === false ? `Generate only the optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the requirements. Do NOT generate unnecessary, generic, or redundant test cases.` : `Generate ${positiveCount} Positive, ${negativeCount} Negative, ${edgeCount} Edge, ${securityCount} Security, and ${performanceCount} Performance test cases.`}
+3. ${customizeVolume === false ? `Generate only the absolute minimum, optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the requirements. Do NOT generate unnecessary, generic, repetitive, or redundant test cases. Each scenario must provide distinct testing value.` : `Generate up to ${positiveCount} Positive, up to ${negativeCount} Negative, up to ${edgeCount} Edge, up to ${securityCount} Security, and up to ${performanceCount} Performance test cases. Do NOT generate filler or redundant test cases to meet these counts if the reference context does not support them.`}
 
 ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
 
 **CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
-1. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
-2. **Detailed Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
-3. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
-4. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
-5. **Zero Redundancy:** Do NOT generate duplicate, generic, or filler test cases. Each scenario must test a completely distinct logical feature path.
-6. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default.
-7. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+1. **Strict Core Alignment & Realism:** Every generated test case must map directly, precisely, and exclusively to the features, rules, parameters, validation thresholds, buttons, status transitions, and data fields described in the Reference Document. Do NOT invent or assume any functionality, fields, components, buttons, or workflows that are not explicitly specified in the document text.
+2. **EXCLUDED JUNK/BOILERPLATE SCENARIOS (ABSOLUTELY PROHIBITED):**
+   - Do NOT generate visual, styling, or UI-layout test cases (e.g., checking font sizes, margins, alignments, cursor pointers, mouse hovers, focus rings, responsive layouts, or button rendering colors/decorations) unless these specific UI design parameters are the core subject of the requirements.
+   - Do NOT generate generic performance/SLA test cases (e.g., verifying that page loads in under 2 seconds, TTFB checks, Lighthouse scores) unless specific performance limits are explicitly defined in the requirements.
+   - Do NOT generate standard, boilerplate security/network scenarios (e.g., standard SQL injection, generic XSS inputs, standard authentication timeouts, 500 server errors, network connection drops) unless they are explicitly defined security requirements of the feature.
+   - Do NOT generate trivial, boilerplate navigation or click-only cases (e.g., verifying that clicking a button redirects to a page or that a menu opens) unless there is custom logic, permissions, or conditional redirection mapping.
+3. **No Redundant or Split Validations:** Do NOT split identical form field validation flows into multiple test cases (e.g., do NOT generate "Verify error when field A is empty" and "Verify error when field B is empty" as separate scenarios). Group them into a single comprehensive test case: "Verify form validation errors when required fields are empty".
+4. **Concrete Test Data & Precise Verification:** Never use vague placeholders like "enter valid data". Specify precise test inputs (e.g., exact emails, specific numerical values, boundaries) and the exact expected outputs (e.g., specific error texts like "Invalid Email Address format").
+5. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
+6. **Explicit Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
+7. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
+8. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
+9. **Zero Filler Scenarios:** Quality and functional depth are paramount. If the story only warrants 2 high-value test cases, generate ONLY those 2. Never generate junk scenarios just to reach requested counts.
+10. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default. Do not make up fake AC numbers that do not correspond to the actual requirements.
+11. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
 **Strict Formatting & Speed Optimization Guidelines:**
 Response must be a valid, raw JSON object matching this schema:
@@ -2217,8 +2185,10 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
        process.env.GEMINI_API_KEY);
 
     let result;
+    let usedMock = false;
     if (!apiKey) {
       console.log('No API key. Generating mock from document.');
+      usedMock = true;
       result = generateMockTestCasesFromDoc(
         documentName,
         documentText,
@@ -2246,6 +2216,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         );
       } catch (err) {
         console.error('Claude API generate-from-doc error, falling back to mock:', err.message);
+        usedMock = true;
         result = generateMockTestCasesFromDoc(
           documentName,
           documentText,
@@ -2274,6 +2245,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         );
       } catch (err) {
         console.error('OpenAI API generate-from-doc error, falling back to mock:', err.message);
+        usedMock = true;
         result = generateMockTestCasesFromDoc(
           documentName,
           documentText,
@@ -2302,6 +2274,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         );
       } catch (err) {
         console.error('Copilot API generate-from-doc error, falling back to mock:', err.message);
+        usedMock = true;
         result = generateMockTestCasesFromDoc(
           documentName,
           documentText,
@@ -2330,6 +2303,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         );
       } catch (err) {
         console.error('Gemini API generate-from-doc error, falling back to mock:', err.message);
+        usedMock = true;
         result = generateMockTestCasesFromDoc(
           documentName,
           documentText,
@@ -2439,7 +2413,11 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         }
       });
 
-      const aiResponseContent = `**Generated ${savedTestCases.length} new Test Cases from document "${documentName}".**` + 
+      let prefix = '';
+      if (usedMock) {
+        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAtlas has extracted template user stories/criteria and generated template test cases based on keyword matches. To get accurate test cases derived from your document, please save your API Key in Settings.\n\n`;
+      }
+      const aiResponseContent = prefix + `**Generated ${savedTestCases.length} new Test Cases from document "${documentName}".**` + 
         (duplicateCount > 0 ? ` (Deduplicated and skipped ${duplicateCount} duplicate scenarios)` : '') +
         `\n\n` +
         `**Extracted User Story:**\n${storyText}\n\n` +

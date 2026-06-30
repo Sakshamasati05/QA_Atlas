@@ -224,6 +224,7 @@ export default function ChatAssistant() {
         body: JSON.stringify({
           userStory,
           acceptanceCriteria,
+          docContext,
           positiveCount,
           negativeCount,
           edgeCount,
@@ -548,7 +549,18 @@ export default function ChatAssistant() {
     const cleanPre = tc.preconditions && tc.preconditions !== 'N/A'
       ? tc.preconditions.replace(/^\[AC\d+\]\s*/i, '').trim()
       : '';
-    const gherkinPre = cleanPre ? `Given ${cleanPre}` : `Given the system is in default state`;
+    
+    let gherkinLines = [];
+    if (cleanPre) {
+      const preLines = cleanPre.split(/(?:\. |\n)/).map(s => s.trim()).filter(Boolean);
+      preLines.forEach((line, idx) => {
+        const prefix = idx === 0 ? 'Given ' : 'And ';
+        const cleaned = line.replace(/^(given|and|when|then)\s+/i, '');
+        gherkinLines.push(`${prefix}${cleaned}`);
+      });
+    } else {
+      gherkinLines.push('Given the system is in default state');
+    }
 
     const rawSteps = tc.steps || '';
     const parsedSteps = rawSteps.split('\n')
@@ -556,20 +568,84 @@ export default function ChatAssistant() {
       .filter(line => line.length > 0)
       .map(line => line.replace(/^\d+[\.\)\s-]+\s*/, '')); // remove step numbers
 
-    let whenSteps = '';
-    if (parsedSteps.length > 0) {
-      whenSteps = parsedSteps.map((step, idx) => {
-        const prefix = idx === 0 ? 'When ' : 'And ';
-        return `${prefix}${step}`;
-      }).join('\n  ');
-    } else {
-      whenSteps = 'When the user performs the action';
+    let currentSection = 'When';
+    let hasWhen = false;
+    let hasThen = false;
+
+    const actionVerbs = /^(click|select|enter|fill|type|submit|press|navigate|open|go to|choose|drag|drop|hover|perform|run|execute|trigger|request|send|post|get|put|delete|patch)/i;
+    const verifyVerbs = /^(verify|check|ensure|assert|validate|confirm|see|should|is shown|is displayed|appears|is visible|observe|witness|must)/i;
+    const givenVerbs = /^(given|setup|assume|authorized|logged in|user is)/i;
+
+    parsedSteps.forEach((step) => {
+      let verbPrefix = '';
+      let cleanedStep = step;
+      
+      const bddMatch = step.match(/^(given|when|then|and|but)\s+/i);
+      if (bddMatch) {
+        verbPrefix = bddMatch[1].toLowerCase();
+        verbPrefix = verbPrefix.charAt(0).toUpperCase() + verbPrefix.slice(1);
+        cleanedStep = step.replace(/^(given|when|then|and|but)\s+/i, '');
+      }
+
+      if (!verbPrefix) {
+        if (givenVerbs.test(step)) {
+          if (!hasWhen && !hasThen) {
+            verbPrefix = gherkinLines.length === 1 && gherkinLines[0] === 'Given the system is in default state' ? 'Given' : 'And';
+            if (verbPrefix === 'Given') {
+              gherkinLines = []; // clear default state
+            }
+            currentSection = 'Given';
+          } else {
+            verbPrefix = 'And';
+          }
+        } else if (verifyVerbs.test(step)) {
+          if (currentSection === 'Then') {
+            verbPrefix = 'And';
+          } else {
+            verbPrefix = 'Then';
+            currentSection = 'Then';
+            hasThen = true;
+          }
+        } else {
+          // Default to action (When)
+          if (currentSection === 'When') {
+            verbPrefix = hasWhen ? 'And' : 'When';
+            hasWhen = true;
+          } else if (currentSection === 'Given') {
+            verbPrefix = 'When';
+            currentSection = 'When';
+            hasWhen = true;
+          } else {
+            verbPrefix = 'When';
+            currentSection = 'When';
+            hasWhen = true;
+          }
+        }
+      } else {
+        if (verbPrefix === 'Given') currentSection = 'Given';
+        if (verbPrefix === 'When') { currentSection = 'When'; hasWhen = true; }
+        if (verbPrefix === 'Then') { currentSection = 'Then'; hasThen = true; }
+      }
+
+      gherkinLines.push(`${verbPrefix} ${cleanedStep}`);
+    });
+
+    if (tc.expectedResult && tc.expectedResult !== 'N/A') {
+      const cleanExpected = tc.expectedResult.replace(/^(then|and|but)\s+/i, '').trim();
+      const expectedLines = cleanExpected.split(/(?:\. |\n)/).map(s => s.trim()).filter(Boolean);
+      expectedLines.forEach((line, idx) => {
+        let prefix = '';
+        if (idx === 0) {
+          prefix = currentSection === 'Then' ? 'And ' : 'Then ';
+          currentSection = 'Then';
+        } else {
+          prefix = 'And ';
+        }
+        gherkinLines.push(`${prefix}${line}`);
+      });
     }
 
-    const expected = tc.expectedResult || 'the system behaves as expected';
-    const thenStep = `Then ${expected}`;
-
-    return `Scenario: ${tc.title}\n  ${gherkinPre}\n  ${whenSteps}\n  ${thenStep}`;
+    return `Scenario: ${tc.title}\n  ${gherkinLines.join('\n  ')}`;
   };
 
   const startDryRun = () => {
