@@ -1706,7 +1706,8 @@ app.post('/api/user-stories', async (req, res) => {
     let existingTitles = [];
     if (matchedStory) {
       storyId = matchedStory.id;
-      existingTitles = matchedStory.testCases.map(tc => tc.title.toLowerCase().trim());
+      // Set existingTitles = [] so LLM generates a complete fresh set
+      existingTitles = [];
     } else {
       storyId = 'US-' + Date.now();
       if (chatId) {
@@ -1894,21 +1895,43 @@ app.post('/api/user-stories', async (req, res) => {
       }
     }
 
-    // 3. Duplicate check - filter out duplicates programmatically
+    // 3. WIPE old test cases and acceptance criteria if matchedStory exists to allow fresh overwrite
+    if (matchedStory) {
+      await prisma.testCase.deleteMany({ where: { userStoryId: storyId } });
+      await prisma.acceptanceCriterion.deleteMany({ where: { userStoryId: storyId } });
+      await prisma.userStory.update({
+        where: { id: storyId },
+        data: {
+          description: userStory || ''
+        }
+      });
+      if (acceptanceCriteria) {
+        const criteriaLines = acceptanceCriteria.split('\n').filter(line => line.trim().length > 0);
+        for (const line of criteriaLines) {
+          await prisma.acceptanceCriterion.create({
+            data: {
+              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+              content: line.trim(),
+              userStoryId: storyId
+            }
+          });
+        }
+      }
+    }
+
     const savedTestCases = [];
     let duplicateCount = 0;
 
     for (const tc of generatedRaw) {
       const cleanedTitle = (tc.title || tc.testName || tc.testSummary || tc.description || '').toLowerCase().trim();
-      const isDuplicate = existingTitles.includes(cleanedTitle) || 
-                          savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
+      const isDuplicate = savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
       
       if (isDuplicate) {
         duplicateCount++;
         continue;
       }
 
-      const idx = existingTitles.length + savedTestCases.length;
+      const idx = savedTestCases.length;
       const newTc = await saveGeneratedTestCase(tc, storyId, format, idx);
       savedTestCases.push(newTc);
     }
@@ -2167,10 +2190,11 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     let isNewStory = true;
 
     if (matchedStory) {
-      existingTitles = matchedStory.testCases.map(tc => tc.title.toLowerCase().trim());
+      // Set existingTitles = [] so LLM generates a complete fresh set
+      existingTitles = [];
       finalStoryId = matchedStory.id;
       isNewStory = false;
-      console.log(`Matched existing story ${finalStoryId} for doc ${documentName}. Found ${existingTitles.length} existing test cases.`);
+      console.log(`Matched existing story ${finalStoryId} for doc ${documentName}. Generating fresh test cases.`);
     }
 
     const provider = req.headers['x-provider'] || 'gemini';
@@ -2358,32 +2382,48 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
       }
     }
 
-    // 2. Programmatic deduplication check
+    // 2. WIPE old test cases and acceptance criteria if not new to allow fresh overwrite
+    if (!isNewStory) {
+      await prisma.testCase.deleteMany({ where: { userStoryId: finalStoryId } });
+      await prisma.acceptanceCriterion.deleteMany({ where: { userStoryId: finalStoryId } });
+      await prisma.userStory.update({
+        where: { id: finalStoryId },
+        data: {
+          description: storyText
+        }
+      });
+      if (acText) {
+        const acLines = acText.split('\n').filter(l => l.trim().length > 0);
+        for (const line of acLines) {
+          await prisma.acceptanceCriterion.create({
+            data: {
+              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+              content: line.trim(),
+              userStoryId: finalStoryId
+            }
+          });
+        }
+      }
+    }
+
     const savedTestCases = [];
     let duplicateCount = 0;
 
     for (const tc of parsedTestCases) {
       const cleanedTitle = (tc.title || tc.testName || tc.testSummary || tc.description || '').toLowerCase().trim();
-      const isDuplicate = existingTitles.includes(cleanedTitle) || 
-                          savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
+      const isDuplicate = savedTestCases.some(saved => saved.title.toLowerCase().trim() === cleanedTitle);
       
       if (isDuplicate) {
         duplicateCount++;
         continue;
       }
 
-      const idx = existingTitles.length + savedTestCases.length;
+      const idx = savedTestCases.length;
       const newTc = await saveGeneratedTestCase(tc, finalStoryId, format, idx);
       savedTestCases.push(newTc);
     }
 
-    // If it's an existing story, retrieve the full list of test cases (both old and new) to return to the frontend
     let allTestCases = savedTestCases;
-    if (!isNewStory) {
-      allTestCases = await prisma.testCase.findMany({
-        where: { userStoryId: finalStoryId }
-      });
-    }
 
     let aiMessage = null;
     if (chatId) {
