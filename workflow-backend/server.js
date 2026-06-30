@@ -199,7 +199,7 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
       } else {
         text = `[Binary file: ${file.originalname}]`;
       }
-      extracted.push({ name: file.originalname, text: text.substring(0, 5000) });
+      extracted.push({ name: file.originalname, text: text.substring(0, 50000) });
     }
     res.json({ success: true, files: extracted });
   } catch (error) {
@@ -207,6 +207,30 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
     res.status(500).json({ error: 'Upload failed: ' + error.message });
   }
 });
+
+// --- HELPER: ROBUST JSON PARSER ---
+function parseCleanJson(rawText) {
+  let jsonString = rawText.trim();
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim();
+  }
+  const firstBrace = jsonString.indexOf('{');
+  const lastBrace = jsonString.lastIndexOf('}');
+  const firstBracket = jsonString.indexOf('[');
+  const lastBracket = jsonString.lastIndexOf(']');
+  
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    if (firstBracket === -1 || firstBrace < firstBracket) {
+      jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+    } else {
+      jsonString = jsonString.substring(firstBracket, lastBracket + 1);
+    }
+  } else if (firstBracket !== -1 && lastBracket !== -1) {
+    jsonString = jsonString.substring(firstBracket, lastBracket + 1);
+  }
+  
+  return JSON.parse(jsonString);
+}
 
 // --- HELPER: MOCK TEST CASES GENERATOR (FALLBACK) ---
 function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default', docContext = '') {
@@ -1086,12 +1110,7 @@ async function getCopilotTestCases(userStory, acceptanceCriteria, positiveCount,
   const resData = await response.json();
   const rawText = resData.choices[0].message.content;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  const parsed = JSON.parse(jsonString);
+  const parsed = parseCleanJson(rawText);
   return parsed.testCases || [];
 }
 
@@ -1125,13 +1144,8 @@ async function getCopilotTestCasesFromDoc(documentName, documentText, positiveCo
   const resData = await response.json();
   const rawText = resData.choices[0].message.content;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  const parsed = JSON.parse(jsonString);
-  return parsed.testCases || [];
+  const parsed = parseCleanJson(rawText);
+  return parsed;
 }
 
 
@@ -1161,12 +1175,7 @@ async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, 
   const resData = await response.json();
   const rawText = resData.choices[0].message.content;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  const parsed = JSON.parse(jsonString);
+  const parsed = parseCleanJson(rawText);
   return parsed.testCases || [];
 }
 
@@ -1530,12 +1539,7 @@ async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, 
   const resData = await response.json();
   const rawText = resData.content[0].text;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  const parsed = JSON.parse(jsonString);
+  const parsed = parseCleanJson(rawText);
   return parsed.testCases || [];
 }
 
@@ -1871,7 +1875,7 @@ app.post('/api/user-stories', async (req, res) => {
         }, apiKey);
 
         const rawJsonText = resData.candidates[0].content.parts[0].text;
-        const parsed = JSON.parse(rawJsonText);
+        const parsed = parseCleanJson(rawJsonText);
         generatedRaw = parsed.testCases || [];
       } catch (err) {
         console.error('Gemini API failed, falling back to mock:', err.message);
@@ -1985,14 +1989,16 @@ function buildDocPromptText(documentName, documentText, positiveCount, negativeC
   return `
 Analyze this requirement/specification document:
 --- Document Name: ${documentName} ---
-${documentText.substring(0, 10000)}
+${documentText.substring(0, 50000)}
 
 Tasks:
 1. Extract a clear, concise User Story summarizing the primary features described in the document (format as: "As a..., I want to..., so that...").
 2. Extract the Acceptance Criteria (list at least 3-5 criteria, newline separated).
 3. ${customizeVolume === false ? `Generate only the absolute minimum, optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the requirements. Do NOT generate unnecessary, generic, repetitive, or redundant test cases. Each scenario must provide distinct testing value.` : `Generate up to ${positiveCount} Positive, up to ${negativeCount} Negative, up to ${edgeCount} Edge, up to ${securityCount} Security, and up to ${performanceCount} Performance test cases. Do NOT generate filler or redundant test cases to meet these counts if the reference context does not support them.`}
 
-${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
+**CRITICAL ACCURACY & COMPREHENSIVENESS INSTRUCTIONS:**
+- **Exhaustive Page-by-Page Coverage:** You MUST perform a thorough analysis of the entire uploaded document context. Do not skip any section, functional parameter, business logic, error condition, or edge limit mentioned in the text. Ensure test cases cover features described in the later sections of the document, not just the beginning.
+- **Accurate Functional Traceability:** Every test case must map directly, precisely, and exclusively to features, rules, validation limits, user actions, buttons, and status transitions stated in the document. Do not invent any field or workflow that is not in the text, and do not ignore any specification that is.
 
 **CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
 1. **Strict Core Alignment & Realism:** Every generated test case must map directly, precisely, and exclusively to the features, rules, parameters, validation thresholds, buttons, status transitions, and data fields described in the Reference Document. Do NOT invent or assume any functionality, fields, components, buttons, or workflows that are not explicitly specified in the document text.
@@ -2054,12 +2060,7 @@ async function getOpenAiTestCasesFromDoc(documentName, documentText, positiveCou
   const resData = await response.json();
   const rawText = resData.choices[0].message.content;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  return JSON.parse(jsonString);
+  return parseCleanJson(rawText);
 }
 
 // --- HELPERS: GENERATION FROM DOCUMENTS ---
@@ -2089,12 +2090,7 @@ async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCou
   const resData = await response.json();
   const rawText = resData.content[0].text;
   
-  let jsonString = rawText.trim();
-  if (jsonString.startsWith('```')) {
-    jsonString = jsonString.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-  }
-  
-  return JSON.parse(jsonString);
+  return parseCleanJson(rawText);
 }
 
 async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, apiKey) {
@@ -2106,7 +2102,7 @@ async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCou
   }, apiKey);
 
   const rawJsonText = resData.candidates[0].content.parts[0].text;
-  return JSON.parse(rawJsonText);
+  return parseCleanJson(rawJsonText);
 }
 
 function generateMockTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
