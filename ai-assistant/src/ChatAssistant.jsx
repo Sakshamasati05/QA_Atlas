@@ -108,6 +108,42 @@ export default function ChatAssistant() {
     localStorage.setItem('qatlas_theme', theme);
   }, [theme]);
 
+  // Synchronize generator panel inputs and test cases when active chat changes
+  const lastLoadedChatIdRef = useRef(null);
+  useEffect(() => {
+    if (lastLoadedChatIdRef.current === activeChatId && pastStories.length > 0 && activeStory) return;
+
+    if (!activeChatId) {
+      setUserStory('');
+      setAcceptanceCriteria('');
+      setUploadedFiles([]);
+      setActiveStory(null);
+      setTestCases([]);
+      setDuplicateCount(0);
+      lastLoadedChatIdRef.current = null;
+      return;
+    }
+
+    const story = pastStories.find(s => s.chatId === activeChatId);
+    if (story) {
+      setActiveStory(story);
+      setUserStory(story.description || '');
+      const acText = story.acceptanceCriteria ? story.acceptanceCriteria.map(ac => ac.content).join('\n') : '';
+      setAcceptanceCriteria(acText);
+      setTestCases(story.testCases || []);
+      setDuplicateCount(0);
+      lastLoadedChatIdRef.current = activeChatId;
+    } else {
+      setUserStory('');
+      setAcceptanceCriteria('');
+      setUploadedFiles([]);
+      setActiveStory(null);
+      setTestCases([]);
+      setDuplicateCount(0);
+      lastLoadedChatIdRef.current = activeChatId;
+    }
+  }, [activeChatId, pastStories]);
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
@@ -459,10 +495,13 @@ export default function ChatAssistant() {
     try {
       const res = await fetch(`${BACKEND_URL}/chats/${chatId}`, { method: 'DELETE' });
       if (res.ok) {
-        setChats(prev => prev.filter(c => c.id !== chatId));
-        if (activeChatId === chatId) {
-          setActiveChatId(chats.find(c => c.id !== chatId)?.id || null);
-        }
+        setChats(prev => {
+          const updated = prev.filter(c => c.id !== chatId);
+          if (activeChatId === chatId) {
+            setActiveChatId(updated.length > 0 ? updated[0].id : null);
+          }
+          return updated;
+        });
       }
     } catch (err) {
       console.error(err);
