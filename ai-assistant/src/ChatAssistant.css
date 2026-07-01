@@ -1405,3 +1405,134 @@ body {
   border-color: var(--border-color);
 }
 
+/* Responsive Layout Adjustments */
+.mobile-header {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .generator-row {
+    flex-direction: column;
+    overflow-y: auto;
+    height: auto;
+  }
+  .generator-form-panel {
+    flex: none;
+    width: 100%;
+    overflow-y: visible;
+  }
+  .generator-chat-panel {
+    width: 100%;
+    height: 500px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 992px) {
+  .qatlas-container {
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 20px;
+    height: 56px;
+    flex-shrink: 0;
+    z-index: 500;
+  }
+
+  .sidebar-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+
+  .sidebar-toggle-btn:hover {
+    background: var(--bg-glass-hover);
+  }
+
+  .mobile-logo-text {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-main);
+  }
+
+  .qatlas-sidebar {
+    position: fixed;
+    left: -320px;
+    top: 0;
+    z-index: 1000;
+    height: 100vh;
+    width: 300px;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.15);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .qatlas-sidebar.open {
+    left: 0;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .qatlas-main {
+    height: calc(100vh - 56px);
+  }
+}
+
+@media (max-width: 768px) {
+  .tab-content {
+    padding: 16px;
+  }
+  .generator-form-panel {
+    padding: 16px;
+    gap: 14px;
+  }
+  .qatlas-title {
+    font-size: 22px;
+  }
+  .repo-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .repo-actions {
+    flex-wrap: wrap;
+  }
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .modal-actions button {
+    width: 100%;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+

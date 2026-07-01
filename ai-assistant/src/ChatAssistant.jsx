@@ -82,6 +82,7 @@ export default function ChatAssistant() {
 
   // BDD Gherkin state
   const [bddModes, setBddModes] = useState({}); // tcId -> boolean
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Dry-Run Simulator State
   const [dryRunCases, setDryRunCases] = useState(null); // null means inactive
@@ -141,6 +142,7 @@ export default function ChatAssistant() {
     const newId = generateChatId();
     setChats([{ id: newId, title: 'New QAtlas Session', messages: [] }, ...chats]);
     setActiveChatId(newId);
+    setSidebarOpen(false);
     setUserStory('');
     setAcceptanceCriteria('');
     setUploadedFiles([]);
@@ -975,8 +977,11 @@ export default function ChatAssistant() {
 
   return (
     <div className="qatlas-container">
+      {/* Sidebar Overlay */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      
       {/* Sidebar */}
-      <div className="qatlas-sidebar">
+      <div className={`qatlas-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">Q</div>
           <span>QAtlas Console</span>
@@ -1063,7 +1068,7 @@ export default function ChatAssistant() {
             <div
               key={chat.id}
               className={`history-item ${activeChatId === chat.id ? 'active' : ''}`}
-              onClick={() => setActiveChatId(chat.id)}
+              onClick={() => { setActiveChatId(chat.id); setSidebarOpen(false); }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>💬 {chat.title}</span>
               <button className="delete-history-btn" onClick={(e) => deleteChat(e, chat.id)}>✕</button>
@@ -1092,6 +1097,18 @@ export default function ChatAssistant() {
 
       {/* Main Area */}
       <div className="qatlas-main">
+        {/* Mobile Header */}
+        <div className="mobile-header">
+          <button className="sidebar-toggle-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle sidebar menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <span className="mobile-logo-text">QAtlas Console</span>
+        </div>
+
         {/* Navigation Tabs */}
         <div className="tabs-navigation">
           <button className={`tab-btn ${activeTab === 'generator' ? 'active' : ''}`} onClick={() => setActiveTab('generator')}>
