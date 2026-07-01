@@ -888,9 +888,10 @@ async function generateDynamicMockChatResponse(chatId, provider, content, hasKey
 // --- HELPER: GEMINI API CALL WITH FALLBACKS ---
 async function callGeminiApi(payload, apiKey) {
   const endpoints = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
   ];
 
   let lastError = null;
@@ -1470,10 +1471,10 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
   }
 
   const claudeModels = [
-    'claude-opus-4-5',
-    'claude-opus-4-20250514',
+    'claude-3-5-sonnet-latest',
     'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-latest'
+    'claude-3-5-haiku-latest',
+    'claude-3-opus-latest'
   ];
 
   const url = 'https://api.anthropic.com/v1/messages';
@@ -1526,7 +1527,7 @@ async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, 
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: 'claude-3-5-sonnet-latest',
       max_tokens: 4000,
       messages: [{ role: 'user', content: promptText }]
     })
@@ -1633,7 +1634,10 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
 // DELETE a chat
 app.delete('/api/chats/:chatId', async (req, res) => {
   try {
-    await prisma.chat.delete({ where: { id: req.params.chatId } });
+    const chat = await prisma.chat.findUnique({ where: { id: req.params.chatId } });
+    if (chat) {
+      await prisma.chat.delete({ where: { id: req.params.chatId } });
+    }
     res.status(200).json({ success: true });
   } catch (error) {
     console.error(error);
@@ -2101,7 +2105,7 @@ async function getClaudeTestCasesFromDoc(documentName, documentText, positiveCou
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: 'claude-3-5-sonnet-latest',
       max_tokens: 4000,
       messages: [{ role: 'user', content: promptText }]
     })
