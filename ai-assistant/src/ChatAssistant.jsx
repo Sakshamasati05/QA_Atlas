@@ -82,6 +82,7 @@ export default function ChatAssistant() {
 
   // BDD Gherkin state
   const [bddModes, setBddModes] = useState({}); // tcId -> boolean
+  const [cardViews, setCardViews] = useState({}); // tcId -> 'manual' | 'gherkin' | 'playwright' | 'cypress'
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Dry-Run Simulator State
@@ -687,6 +688,133 @@ export default function ChatAssistant() {
     }
 
     return `Scenario: ${tc.title}\n  ${gherkinLines.join('\n  ')}`;
+  };
+
+  const convertToPlaywright = (tc) => {
+    const titleClean = tc.title ? tc.title.replace(/"/g, '\\"') : 'Test Case';
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+    
+    let jsLines = [];
+    jsLines.push(`import { test, expect } from '@playwright/test';\n`);
+    jsLines.push(`test('${idClean}: ${titleClean}', async ({ page }) => {`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      jsLines.push(`  // Preconditions: ${tc.preconditions.replace(/\n/g, ' ')}`);
+    }
+    
+    stepsList.forEach((step, idx) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      jsLines.push(`  // Step ${idx + 1}: ${cleanStep}`);
+      
+      const lowerStep = cleanStep.toLowerCase();
+      if (lowerStep.includes('click') || lowerStep.includes('tap') || lowerStep.includes('press')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const target = match ? match[1] : 'button';
+        jsLines.push(`  await page.click('text="${target}"');`);
+      } else if (lowerStep.includes('enter') || lowerStep.includes('type') || lowerStep.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const value = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : 'test data';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'input';
+        jsLines.push(`  await page.fill('input[placeholder*="${field}"], input[name="${field}"], label:has-text("${field}") ~ input', '${value}');`);
+      } else if (lowerStep.includes('select') || lowerStep.includes('choose')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const option = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : '';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'select';
+        if (option) {
+          jsLines.push(`  await page.selectOption('select[name="${field}"], label:has-text("${field}") ~ select', { label: '${option}' });`);
+        } else {
+          jsLines.push(`  // TODO: Implement select option`);
+        }
+      } else if (lowerStep.includes('navigate') || lowerStep.includes('open') || lowerStep.includes('go to')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const url = match ? match[1] : '/';
+        jsLines.push(`  await page.goto('${url.startsWith('http') ? url : url}');`);
+      } else if (lowerStep.includes('verify') || lowerStep.includes('check') || lowerStep.includes('should') || lowerStep.includes('expect')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const text = match ? match[1] : 'expected text';
+        jsLines.push(`  await expect(page.locator('body')).toContainText('${text}');`);
+      } else {
+        jsLines.push(`  // Action: ${cleanStep}`);
+      }
+      jsLines.push('');
+    });
+    
+    if (tc.expectedResult) {
+      jsLines.push(`  // Assert Expected Result: ${tc.expectedResult.replace(/\n/g, ' ')}`);
+      const match = tc.expectedResult.match(/['"]([^'"]+)['"]/);
+      const assertText = match ? match[1] : '';
+      if (assertText) {
+        jsLines.push(`  await expect(page.locator('body')).toContainText('${assertText}');`);
+      }
+    }
+    
+    jsLines.push(`});`);
+    return jsLines.join('\n');
+  };
+
+  const convertToCypress = (tc) => {
+    const titleClean = tc.title ? tc.title.replace(/"/g, '\\"') : 'Test Case';
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+    
+    let jsLines = [];
+    jsLines.push(`describe('${idClean}: ${titleClean}', () => {`);
+    jsLines.push(`  it('should execute successfully', () => {`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      jsLines.push(`    // Preconditions: ${tc.preconditions.replace(/\n/g, ' ')}`);
+    }
+    
+    stepsList.forEach((step, idx) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      jsLines.push(`    // Step ${idx + 1}: ${cleanStep}`);
+      
+      const lowerStep = cleanStep.toLowerCase();
+      if (lowerStep.includes('click') || lowerStep.includes('tap') || lowerStep.includes('press')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const target = match ? match[1] : 'button';
+        jsLines.push(`    cy.contains('${target}').click();`);
+      } else if (lowerStep.includes('enter') || lowerStep.includes('type') || lowerStep.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const value = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : 'test data';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'input';
+        jsLines.push(`    cy.get('input[placeholder*="${field}"], input[name="${field}"]')\n      .clear().type('${value}');`);
+      } else if (lowerStep.includes('select') || lowerStep.includes('choose')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const option = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : '';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'select';
+        if (option) {
+          jsLines.push(`    cy.get('select[name="${field}"]').select('${option}');`);
+        } else {
+          jsLines.push(`    // TODO: Implement select option`);
+        }
+      } else if (lowerStep.includes('navigate') || lowerStep.includes('open') || lowerStep.includes('go to')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const url = match ? match[1] : '/';
+        jsLines.push(`    cy.visit('${url.startsWith('http') ? url : url}');`);
+      } else if (lowerStep.includes('verify') || lowerStep.includes('check') || lowerStep.includes('should') || lowerStep.includes('expect')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const text = match ? match[1] : 'expected text';
+        jsLines.push(`    cy.contains('${text}').should('be.visible');`);
+      } else {
+        jsLines.push(`    // Action: ${cleanStep}`);
+      }
+      jsLines.push('');
+    });
+    
+    if (tc.expectedResult) {
+      jsLines.push(`    // Assert Expected Result: ${tc.expectedResult.replace(/\n/g, ' ')}`);
+      const match = tc.expectedResult.match(/['"]([^'"]+)['"]/);
+      const assertText = match ? match[1] : '';
+      if (assertText) {
+        jsLines.push(`    cy.contains('${assertText}').should('be.visible');`);
+      }
+    }
+    
+    jsLines.push(`  });`);
+    jsLines.push(`});`);
+    return jsLines.join('\n');
   };
 
   const startDryRun = () => {
@@ -1665,160 +1793,219 @@ export default function ChatAssistant() {
                           </div>
                         </div>
 
-                        {bddModes[tc.id] ? (
-                          <div className="tc-details bdd-details">
-                            <div className="detail-row">
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                <span className="detail-label">BDD Gherkin Scenario</span>
-                                <button className="copy-bdd-btn" onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(convertToGherkin(tc));
-                                  const btn = e.target;
-                                  btn.textContent = '✅ Copied!';
-                                  setTimeout(() => { btn.textContent = '📋 Copy BDD'; }, 1500);
-                                }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
-                                  📋 Copy BDD
-                                </button>
+                        {(() => {
+                          const currentView = cardViews[tc.id] || 'manual';
+                          if (currentView === 'gherkin') {
+                            return (
+                              <div className="tc-details bdd-details">
+                                <div className="detail-row">
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">BDD Gherkin Scenario</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(convertToGherkin(tc));
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy BDD'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy BDD
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {convertToGherkin(tc)}
+                                  </pre>
+                                </div>
                               </div>
-                              <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace', lineHeight: '1.4' }}>
-                                {convertToGherkin(tc)}
-                              </pre>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="tc-details">
-                            {format === 'LLY TU' ? (
-                              <>
+                            );
+                          } else if (currentView === 'playwright') {
+                            return (
+                              <div className="tc-details playwright-details">
                                 <div className="detail-row">
-                                  <span className="detail-label">Test Path</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testPath') || '/DefaultPath/Section'}</span>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">Playwright Automation Code</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(convertToPlaywright(tc));
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy Code'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy Code
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {convertToPlaywright(tc)}
+                                  </pre>
                                 </div>
+                              </div>
+                            );
+                          } else if (currentView === 'cypress') {
+                            return (
+                              <div className="tc-details cypress-details">
                                 <div className="detail-row">
-                                  <span className="detail-label">Designer</span>
-                                  <span className="detail-value">{getCustomField(tc, 'designer') || 'QA Team'}</span>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">Cypress Automation Code</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(convertToCypress(tc));
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy Code'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy Code
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {convertToCypress(tc)}
+                                  </pre>
                                 </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Category</span>
-                                  <span className="detail-value">{getCustomField(tc, 'category') || 'General'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Preconditions</span>
-                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Step Name</span>
-                                  <span className="detail-value">{getCustomField(tc, 'stepName') || 'Perform Action'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Step Description</span>
-                                  <span className="detail-value">{tc.steps}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Expected Result</span>
-                                  <span className="detail-value">{tc.expectedResult}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Evidence Required</span>
-                                  <span className="detail-value">{getCustomField(tc, 'evidenceRequired') || 'No'}</span>
-                                </div>
-                              </>
-                            ) : format === 'LLY PBPA' ? (
-                              <>
-                                <div className="detail-row">
-                                  <span className="detail-label">Test Summary</span>
-                                  <span className="detail-value">{tc.title}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Test Case Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title || 'Verify function.'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Preconditions</span>
-                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Steps to be Followed</span>
-                                  <span className="detail-value">{tc.steps}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Expected Result</span>
-                                  <span className="detail-value">{tc.expectedResult}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Actual Result</span>
-                                  <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
-                                </div>
-                              </>
-                            ) : format === 'DEL' ? (
-                              <>
-                                <div className="detail-row">
-                                  <span className="detail-label">Description</span>
-                                  <span className="detail-value">{tc.title}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Preconditions</span>
-                                  <span className="detail-value">{tc.preconditions || 'N/A'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Test Data</span>
-                                  <span className="detail-value">{getCustomField(tc, 'testData') || 'Valid credentials'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Test Steps</span>
-                                  <span className="detail-value">{tc.steps}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Expected Result</span>
-                                  <span className="detail-value">{tc.expectedResult}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Actual Result</span>
-                                  <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Bug ID</span>
-                                  <span className="detail-value">{getCustomField(tc, 'bugId') || 'N/A'}</span>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="detail-row">
-                                  <span className="detail-label">Description</span>
-                                  <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
-                                </div>
-                                {tc.preconditions && tc.preconditions !== 'N/A' && (
-                                  <div className="detail-row">
-                                    <span className="detail-label">Preconditions</span>
-                                    <span className="detail-value">{tc.preconditions}</span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="tc-details">
+                                {format === 'LLY TU' ? (
+                                  <>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Test Path</span>
+                                      <span className="detail-value">{getCustomField(tc, 'testPath') || '/DefaultPath/Section'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Designer</span>
+                                      <span className="detail-value">{getCustomField(tc, 'designer') || 'QA Team'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Category</span>
+                                      <span className="detail-value">{getCustomField(tc, 'category') || 'General'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Description</span>
+                                      <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Preconditions</span>
+                                      <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Step Name</span>
+                                      <span className="detail-value">{getCustomField(tc, 'stepName') || 'Perform Action'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Step Description</span>
+                                      <span className="detail-value">{tc.steps}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Expected Result</span>
+                                      <span className="detail-value">{tc.expectedResult}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Evidence Required</span>
+                                      <span className="detail-value">{getCustomField(tc, 'evidenceRequired') || 'No'}</span>
+                                    </div>
+                                  </>
+                                ) : format === 'LLY PBPA' ? (
+                                  <>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Test Summary</span>
+                                      <span className="detail-value">{tc.title}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Test Case Description</span>
+                                      <span className="detail-value">{getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title || 'Verify function.'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Preconditions</span>
+                                      <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Steps to be Followed</span>
+                                      <span className="detail-value">{tc.steps}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Expected Result</span>
+                                      <span className="detail-value">{tc.expectedResult}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Actual Result</span>
+                                      <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
+                                    </div>
+                                  </>
+                                ) : format === 'DEL' ? (
+                                  <>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Description</span>
+                                      <span className="detail-value">{tc.title}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Preconditions</span>
+                                      <span className="detail-value">{tc.preconditions || 'N/A'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Test Data</span>
+                                      <span className="detail-value">{getCustomField(tc, 'testData') || 'Valid credentials'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Test Steps</span>
+                                      <span className="detail-value">{tc.steps}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Expected Result</span>
+                                      <span className="detail-value">{tc.expectedResult}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Actual Result</span>
+                                      <span className="detail-value">{getCustomField(tc, 'actualResult') || 'N/A'}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Bug ID</span>
+                                      <span className="detail-value">{getCustomField(tc, 'bugId') || 'N/A'}</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Description</span>
+                                      <span className="detail-value">{getCustomField(tc, 'description') || tc.title || 'Verify the scenario.'}</span>
+                                    </div>
+                                    {tc.preconditions && tc.preconditions !== 'N/A' && (
+                                      <div className="detail-row">
+                                        <span className="detail-label">Preconditions</span>
+                                        <span className="detail-value">{tc.preconditions}</span>
+                                      </div>
+                                    )}
+                                    <div className="detail-row">
+                                      <span className="detail-label">Steps</span>
+                                      <span className="detail-value">{tc.steps}</span>
+                                    </div>
+                                    <div className="detail-row">
+                                      <span className="detail-label">Expected Result</span>
+                                      <span className="detail-value">{tc.expectedResult}</span>
+                                    </div>
+                                  </>
+                                )}
+                                {tc.executionComments && (
+                                  <div className="detail-row execution-notes-row" style={{ marginTop: '8px', padding: '6px 8px', background: 'var(--bg-glass-hover)', borderLeft: '3px solid var(--text-muted)', borderRadius: '0 4px 4px 0' }}>
+                                    <span className="detail-label" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Execution Run Comments</span>
+                                    <span className="detail-value" style={{ fontStyle: 'italic', fontSize: '12px', color: 'var(--text-sub)' }}>"{tc.executionComments}"</span>
                                   </div>
                                 )}
-                                <div className="detail-row">
-                                  <span className="detail-label">Steps</span>
-                                  <span className="detail-value">{tc.steps}</span>
-                                </div>
-                                <div className="detail-row">
-                                  <span className="detail-label">Expected Result</span>
-                                  <span className="detail-value">{tc.expectedResult}</span>
-                                </div>
-                              </>
-                            )}
-                            {tc.executionComments && (
-                              <div className="detail-row execution-notes-row" style={{ marginTop: '8px', padding: '6px 8px', background: 'var(--bg-glass-hover)', borderLeft: '3px solid var(--text-muted)', borderRadius: '0 4px 4px 0' }}>
-                                <span className="detail-label" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Execution Run Comments</span>
-                                <span className="detail-value" style={{ fontStyle: 'italic', fontSize: '12px', color: 'var(--text-sub)' }}>"{tc.executionComments}"</span>
                               </div>
-                            )}
-                          </div>
-                        )}
+                            );
+                          }
+                        })()}
 
                         <div className="tc-card-actions">
-                          <button className="card-action-btn" onClick={() => toggleBddMode(tc.id)}>
-                            {bddModes[tc.id] ? '📝 Manual Steps' : '🤖 BDD (Gherkin)'}
-                          </button>
+                          <select
+                            className="sidebar-select"
+                            value={cardViews[tc.id] || 'manual'}
+                            onChange={(e) => setCardViews(prev => ({ ...prev, [tc.id]: e.target.value }))}
+                            style={{ width: 'auto', padding: '4px 8px', fontSize: '12px', height: '32px', cursor: 'pointer', background: 'var(--bg-glass-hover)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px' }}
+                          >
+                            <option value="manual">📝 Manual Steps</option>
+                            <option value="gherkin">🤖 BDD (Gherkin)</option>
+                            <option value="playwright">🎭 Playwright Code</option>
+                            <option value="cypress">🌲 Cypress Code</option>
+                          </select>
                           <button className="card-action-btn" onClick={() => handleEditClick(tc)}>
                             ✏️ Edit
                           </button>
