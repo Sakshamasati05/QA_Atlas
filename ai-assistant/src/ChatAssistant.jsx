@@ -154,9 +154,7 @@ export default function ChatAssistant() {
       const res = await fetch(`${BACKEND_URL}/chats?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
       setChats(data);
-      if (data.length > 0 && !activeChatId) {
-        setActiveChatId(data[0].id);
-      }
+      // Auto-selecting the first chat session on load is disabled to ensure a fresh, clean slate upon page load/refresh.
     } catch (err) {
       console.error('Failed to fetch chats:', err);
     }
@@ -187,6 +185,17 @@ export default function ChatAssistant() {
     setTestCases([]);
     setDuplicateCount(0);
     setActiveTab('generator');
+  };
+
+  const handleClearWorkspace = () => {
+    setUserStory('');
+    setAcceptanceCriteria('');
+    setTestCases([]);
+    setActiveChatId(null);
+    setActiveStory(null);
+    setSelectedTestCase(null);
+    setUploadedFiles([]);
+    setDuplicateCount(0);
   };
 
   // --- Document File Upload ---
@@ -1368,13 +1377,25 @@ export default function ChatAssistant() {
                   )}
                 </div>
 
-                <button
-                  className="generate-btn"
-                  onClick={handleGenerateTestCases}
-                  disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim())}
-                >
-                  {isTyping ? 'Generating Test Cases...' : '✨ Generate Test Suite'}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '4px' }}>
+                  <button
+                    className="generate-btn"
+                    onClick={handleGenerateTestCases}
+                    disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim())}
+                    style={{ flex: 1, margin: 0 }}
+                  >
+                    {isTyping ? 'Generating Test Cases...' : '✨ Generate Test Suite'}
+                  </button>
+                  <button
+                    className="generate-btn reset"
+                    onClick={handleClearWorkspace}
+                    disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim() && testCases.length === 0 && !activeChatId)}
+                    style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--negative-color)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0 16px', margin: 0 }}
+                    title="Clear workspace inputs and active session"
+                  >
+                    🗑️ Clear
+                  </button>
+                </div>
               </div>
 
               {/* Chat Panel */}
