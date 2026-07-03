@@ -24,7 +24,7 @@ export default function ChatAssistant() {
   const [tempCopilotKey, setTempCopilotKey] = useState(copilotKey);
   const [theme, setTheme] = useState(() => localStorage.getItem('qatlas_theme') || 'light');
 
-  // QAtlas Generator Input Form
+  // QAutopilot Generator Input Form
   const [userStory, setUserStory] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [format, setFormat] = useState('Default');
@@ -175,7 +175,7 @@ export default function ChatAssistant() {
 
   const createNewChat = () => {
     const newId = generateChatId();
-    setChats([{ id: newId, title: 'New QAtlas Session', messages: [] }, ...chats]);
+    setChats([{ id: newId, title: 'New QAutopilot Session', messages: [] }, ...chats]);
     setActiveChatId(newId);
     setSidebarOpen(false);
     setUserStory('');
@@ -248,7 +248,7 @@ export default function ChatAssistant() {
       const tempUserMsg = { 
         id: 'temp', 
         role: 'user', 
-        content: `Generate QAtlas Test Cases.\nUser Story: ${userStory}\nAcceptance Criteria: ${acceptanceCriteria}` 
+        content: `Generate QAutopilot Test Cases.\nUser Story: ${userStory}\nAcceptance Criteria: ${acceptanceCriteria}` 
       };
       if (chatIndex === -1) {
         return [{ id: currentChatId, title: userStory.substring(0, 20) || 'Generated Tests', messages: [tempUserMsg] }, ...prev];
@@ -342,7 +342,7 @@ export default function ChatAssistant() {
       const tempUserMsg = { 
         id: tempId, 
         role: 'user', 
-        content: `Extract requirements and generate QAtlas test cases from document: ${file.name}` 
+        content: `Extract requirements and generate QAutopilot test cases from document: ${file.name}` 
       };
       if (chatIndex === -1) {
         return [{ id: currentChatId, title: 'Doc: ' + file.name, messages: [tempUserMsg] }, ...prev];
@@ -591,7 +591,7 @@ export default function ChatAssistant() {
     }
   };
 
-  // --- QAtlas Advanced QA Workflows (BDD, Dry-Run, Exporters) ---
+  // --- QAutopilot Advanced QA Workflows (BDD, Dry-Run, Exporters) ---
   const toggleBddMode = (tcId) => {
     setBddModes(prev => ({ ...prev, [tcId]: !prev[tcId] }));
   };
@@ -1052,7 +1052,7 @@ export default function ChatAssistant() {
     if (testCases.length === 0) return;
     let content = '';
     let mimeType = 'text/plain';
-    let filename = `QAtlas_TestCases_${activeStory?.id || 'export'}`;
+    let filename = `QAutopilot_TestCases_${activeStory?.id || 'export'}`;
 
     if (exportType === 'json') {
       content = JSON.stringify(testCases, null, 2);
@@ -1152,15 +1152,15 @@ export default function ChatAssistant() {
   );
 
   return (
-    <div className="qatlas-container">
+    <div className="qautopilot-container">
       {/* Sidebar Overlay */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       
       {/* Sidebar */}
-      <div className={`qatlas-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <div className={`qautopilot-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">Q</div>
-          <span>QAtlas Console</span>
+          <span>QAutopilot Console</span>
         </div>
 
         {/* UPLOAD DOCUMENTS */}
@@ -1272,7 +1272,7 @@ export default function ChatAssistant() {
       </div>
 
       {/* Main Area */}
-      <div className="qatlas-main">
+      <div className="qautopilot-main">
         {/* Mobile Header */}
         <div className="mobile-header">
           <button className="sidebar-toggle-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle sidebar menu">
@@ -1282,7 +1282,7 @@ export default function ChatAssistant() {
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
-          <span className="mobile-logo-text">QAtlas Console</span>
+          <span className="mobile-logo-text">QAutopilot Console</span>
         </div>
 
         {/* Navigation Tabs */}
@@ -1308,7 +1308,7 @@ export default function ChatAssistant() {
               {/* Form Input Panel */}
               <div className="generator-form-panel">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h1 className="qatlas-title">QAtlas test case generator</h1>
+                  <h1 className="qautopilot-title">QAutopilot Test Case Generator</h1>
                   {activeStory && (
                     <span style={{ fontSize: '12px', color: 'var(--primary)' }}>
                       Active: {activeStory.id}
@@ -1401,7 +1401,7 @@ export default function ChatAssistant() {
               {/* Chat Panel */}
               <div className="generator-chat-panel">
                 <div className="chat-header">
-                  <span>QAtlas Discussion Log</span>
+                  <span>QAutopilot Discussion Log</span>
                   <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>
                     {(provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey) 
                       ? `⚡ ${provider === 'claude' ? 'Claude Opus 4.8' : provider === 'chatgpt' ? 'ChatGPT (GPT-5.5)' : provider === 'copilot' ? 'Microsoft Copilot' : 'Gemini 3.5 Flash'} Connected` 
@@ -1411,7 +1411,7 @@ export default function ChatAssistant() {
                 <div className="chat-messages">
                   {activeChat.messages.length === 0 ? (
                     <div className="empty-state" style={{ border: 'none', margin: 'auto' }}>
-                      <h3>Interactive QAtlas Chat</h3>
+                      <h3>Interactive QAutopilot Chat</h3>
                       <p>Ask follow-up questions to refine, tweak, or add test cases. All discussion history is saved in SQLite.</p>
                     </div>
                   ) : (
@@ -2356,7 +2356,7 @@ export default function ChatAssistant() {
         <div className="modal-backdrop">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>QAtlas Configuration</h3>
+              <h3>QAutopilot Configuration</h3>
               <button className="modal-close" onClick={() => setIsSettingsOpen(false)}>✕</button>
             </div>
             
@@ -2444,7 +2444,7 @@ export default function ChatAssistant() {
             )}
 
             <span className="upload-hint" style={{ marginTop: '12px', display: 'block', marginBottom: '8px' }}>
-              Keys are saved locally in your browser. If a key is missing for your selected provider, QAtlas falls back to the advanced heuristic mock generator.
+              Keys are saved locally in your browser. If a key is missing for your selected provider, QAutopilot falls back to the advanced heuristic mock generator.
             </span>
 
             <div className="modal-actions">

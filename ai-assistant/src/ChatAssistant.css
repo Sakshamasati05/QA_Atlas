@@ -98,7 +98,7 @@ body {
   background: var(--text-sub);
 }
 
-.qatlas-container {
+.qautopilot-container {
   display: flex;
   height: 100vh;
   width: 100vw;
@@ -110,7 +110,7 @@ body {
 }
 
 /* Sidebar Styling */
-.qatlas-sidebar {
+.qautopilot-sidebar {
   width: 320px;
   background-color: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
@@ -378,7 +378,7 @@ body {
 }
 
 /* Main Area Container */
-.qatlas-main {
+.qautopilot-main {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -461,7 +461,7 @@ body {
   box-shadow: var(--glass-shadow);
 }
 
-.qatlas-title {
+.qautopilot-title {
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 26px;
@@ -1431,7 +1431,7 @@ body {
 }
 
 @media (max-width: 992px) {
-  .qatlas-container {
+  .qautopilot-container {
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
@@ -1473,7 +1473,7 @@ body {
     color: var(--text-main);
   }
 
-  .qatlas-sidebar {
+  .qautopilot-sidebar {
     position: fixed;
     left: -320px;
     top: 0;
@@ -1484,7 +1484,7 @@ body {
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .qatlas-sidebar.open {
+  .qautopilot-sidebar.open {
     left: 0;
   }
 
@@ -1500,7 +1500,7 @@ body {
     animation: fadeIn 0.2s ease-out;
   }
 
-  .qatlas-main {
+  .qautopilot-main {
     height: calc(100vh - 56px);
   }
 }
@@ -1513,7 +1513,7 @@ body {
     padding: 16px;
     gap: 14px;
   }
-  .qatlas-title {
+  .qautopilot-title {
     font-size: 22px;
   }
   .repo-header {

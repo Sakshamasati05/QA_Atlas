@@ -841,7 +841,7 @@ async function generateDynamicMockChatResponse(chatId, provider, content, hasKey
 
   // ── 8. FORMATS ──
   if (/format|lly tu|lly pbpa|del format|template/.test(query)) {
-    return `QAtlas supports **3 test case formats**:\n\n- **LLY TU** — Includes Test Path, Designer, Category, Step Name\n- **LLY PBPA** — Focuses on Test Summary, Steps, and Expected Result\n- **DEL** — Sequential IDs (TC001...) with Test Data and Bug ID fields\n\nSelect your format from the dropdown before generating — the entire suite adapts automatically!`;
+    return `QAutopilot supports **3 test case formats**:\n\n- **LLY TU** — Includes Test Path, Designer, Category, Step Name\n- **LLY PBPA** — Focuses on Test Summary, Steps, and Expected Result\n- **DEL** — Sequential IDs (TC001...) with Test Data and Bug ID fields\n\nSelect your format from the dropdown before generating — the entire suite adapts automatically!`;
   }
 
   // ── 9. FEATURE-SPECIFIC TEST CASE REQUESTS (Dynamic offline mock generator) ──
@@ -938,7 +938,7 @@ async function callGeminiApi(payload, apiKey) {
 }
 
 // --- GLOBAL CHATBOT SYSTEM PROMPT ---
-const CHATBOT_SYSTEM_PROMPT = `You are QAtlas, a world-class QA Automation Engineer.
+const CHATBOT_SYSTEM_PROMPT = `You are QAutopilot, a world-class QA Automation Engineer.
 When users ask you to write, modify, analyze, or suggest test cases:
 1. **Strict Context Adherence**: Base your responses strictly on the provided user story, acceptance criteria, or reference document. Never assume or invent functionality, fields, inputs, or system actions that are not explicitly documented.
 2. **Zero Boilerplate (Faltu) Scenarios**: Absolutely exclude Visual/UI style checks, generic performance SLAs, generic server connection drops, and standard security attacks (like generic SQLi/XSS) unless the specification explicitly defines them.
@@ -1963,7 +1963,7 @@ app.post('/api/user-stories', async (req, res) => {
         chat = await prisma.chat.create({
           data: {
             id: chatId,
-            title: 'QAtlas: ' + (userStory.substring(0, 20) || 'Test Cases'),
+            title: 'QAutopilot: ' + (userStory.substring(0, 20) || 'Test Cases'),
             userId: userId,
             createdAt: new Date().toISOString()
           }
@@ -1985,7 +1985,7 @@ app.post('/api/user-stories', async (req, res) => {
 
       let prefix = '';
       if (usedMock) {
-        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAtlas has generated template test cases based on keyword matches. To generate accurate, custom test cases from your document, please save your API Key in Settings.\n\n`;
+        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAutopilot has generated template test cases based on keyword matches. To generate accurate, custom test cases from your document, please save your API Key in Settings.\n\n`;
       }
       const aiResponseContent = prefix + `**Generated ${savedTestCases.length} Test Cases successfully.**` + 
         (duplicateCount > 0 ? ` (Deduplicated and skipped ${duplicateCount} duplicate scenarios)` : '') +
@@ -2153,7 +2153,7 @@ async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCou
 
 function generateMockTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
   const words = documentText.replace(/[^\w\s]/g, '').split(/\s+/).slice(0, 15).join(' ');
-  const userStory = `As a QAtlas analyst, I want to execute business features from "${documentName}" so that we verify system specs: ${words}...`;
+  const userStory = `As a QAutopilot analyst, I want to execute business features from "${documentName}" so that we verify system specs: ${words}...`;
   const acceptanceCriteria = `AC1: The system must enforce validation rules in ${documentName}.\nAC2: Navigation and actions defined in ${documentName} must respond correctly.`;
   
   const testCases = generateMockTestCases(
@@ -2455,7 +2455,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         chat = await prisma.chat.create({
           data: {
             id: chatId,
-            title: 'QAtlas Doc: ' + documentName,
+            title: 'QAutopilot Doc: ' + documentName,
             userId: userId,
             createdAt: new Date().toISOString()
           }
@@ -2474,7 +2474,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
 
       let prefix = '';
       if (usedMock) {
-        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAtlas has extracted template user stories/criteria and generated template test cases based on keyword matches. To get accurate test cases derived from your document, please save your API Key in Settings.\n\n`;
+        prefix = `⚠️ **Notice: Offline Heuristic Mode Active.** No API Key was detected (or API request failed). QAutopilot has extracted template user stories/criteria and generated template test cases based on keyword matches. To get accurate test cases derived from your document, please save your API Key in Settings.\n\n`;
       }
       const aiResponseContent = prefix + `**Generated ${savedTestCases.length} new Test Cases from document "${documentName}".**` + 
         (duplicateCount > 0 ? ` (Deduplicated and skipped ${duplicateCount} duplicate scenarios)` : '') +
