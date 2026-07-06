@@ -85,6 +85,15 @@ export default function ChatAssistant() {
   const [cardViews, setCardViews] = useState({}); // tcId -> 'manual' | 'gherkin' | 'playwright' | 'cypress'
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // New QAutopilot Advanced States
+  const [generatingAcIndex, setGeneratingAcIndex] = useState(null);
+  const [testStrategyText, setTestStrategyText] = useState('');
+  const [isGeneratingStrategy, setIsGeneratingStrategy] = useState(false);
+  const [boundarySuggestions, setBoundarySuggestions] = useState(null);
+  const [isExploringBoundaries, setIsExploringBoundaries] = useState(false);
+  const [jiraBugText, setJiraBugText] = useState(null);
+  const [isOptimizingSuite, setIsOptimizingSuite] = useState(false);
+
   // Dry-Run Simulator State
   const [dryRunCases, setDryRunCases] = useState(null); // null means inactive
   const [currentDryRunIndex, setCurrentDryRunIndex] = useState(0);
@@ -826,6 +835,571 @@ export default function ChatAssistant() {
     return jsLines.join('\n');
   };
 
+  const convertToSeleniumJava = (tc) => {
+    const titleClean = tc.title ? tc.title.replace(/"/g, '\\"') : 'Test Case';
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+
+    let lines = [];
+    lines.push(`import org.junit.jupiter.api.*;`);
+    lines.push(`import org.openqa.selenium.By;`);
+    lines.push(`import org.openqa.selenium.WebDriver;`);
+    lines.push(`import org.openqa.selenium.chrome.ChromeDriver;`);
+    lines.push(`import static org.junit.jupiter.api.Assertions.*;\n`);
+    lines.push(`public class ${idClean}_Test {`);
+    lines.push(`    private WebDriver driver;\n`);
+    lines.push(`    @BeforeEach`);
+    lines.push(`    public void setUp() {`);
+    lines.push(`        driver = new ChromeDriver();`);
+    lines.push(`    }\n`);
+    lines.push(`    @Test`);
+    lines.push(`    public void test_${idClean}_${tc.title.replace(/[^a-zA-Z0-9]/g, '_')}() {`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      lines.push(`        // Preconditions: ${tc.preconditions.replace(/\n/g, ' ')}`);
+    }
+
+    stepsList.forEach((step, idx) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      lines.push(`        // Step ${idx + 1}: ${cleanStep}`);
+      const lower = cleanStep.toLowerCase();
+      if (lower.includes('click') || lower.includes('tap') || lower.includes('press')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const target = match ? match[1] : 'button';
+        lines.push(`        driver.findElement(By.xpath("//*[contains(text(), '${target}')]")).click();`);
+      } else if (lower.includes('enter') || lower.includes('type') || lower.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const value = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : 'data';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'input';
+        lines.push(`        driver.findElement(By.cssSelector("input[placeholder*='${field}'], input[name='${field}']")).sendKeys("${value}");`);
+      } else if (lower.includes('navigate') || lower.includes('open') || lower.includes('go to')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const url = match ? match[1] : '/';
+        lines.push(`        driver.get("${url}");`);
+      } else if (lower.includes('verify') || lower.includes('check') || lower.includes('should') || lower.includes('expect')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const text = match ? match[1] : 'text';
+        lines.push(`        assertTrue(driver.findElement(By.tagName("body")).getText().contains("${text}"));`);
+      } else {
+        lines.push(`        // Action: ${cleanStep}`);
+      }
+      lines.push('');
+    });
+
+    if (tc.expectedResult) {
+      lines.push(`        // Assert Expected: ${tc.expectedResult.replace(/\n/g, ' ')}`);
+    }
+    
+    lines.push(`    }\n`);
+    lines.push(`    @AfterEach`);
+    lines.push(`    public void tearDown() {`);
+    lines.push(`        if (driver != null) driver.quit();`);
+    lines.push(`    }`);
+    lines.push(`}`);
+    return lines.join('\n');
+  };
+
+  const convertToSeleniumPython = (tc) => {
+    const titleClean = tc.title ? tc.title.replace(/'/g, "\\'") : 'Test Case';
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+
+    let lines = [];
+    lines.push(`import pytest`);
+    lines.push(`from selenium import webdriver`);
+    lines.push(`from selenium.webdriver.common.by import By\n`);
+    lines.push(`@pytest.fixture`);
+    lines.push(`def driver():`);
+    lines.push(`    driver = webdriver.Chrome()`);
+    lines.push(`    yield driver`);
+    lines.push(`    driver.quit()\n`);
+    lines.push(`def test_${idClean.toLowerCase()}_${tc.title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}(driver):`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      lines.push(`    # Preconditions: ${tc.preconditions.replace(/\n/g, ' ')}`);
+    }
+
+    stepsList.forEach((step, idx) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      lines.push(`    # Step ${idx + 1}: ${cleanStep}`);
+      const lower = cleanStep.toLowerCase();
+      if (lower.includes('click') || lower.includes('tap') || lower.includes('press')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const target = match ? match[1] : 'button';
+        lines.push(`    driver.find_element(By.XPATH, "//*[contains(text(), '${target}')]").click()`);
+      } else if (lower.includes('enter') || lower.includes('type') || lower.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const value = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : 'data';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'input';
+        lines.push(`    driver.find_element(By.CSS_SELECTOR, "input[placeholder*='${field}'], input[name='${field}']").send_keys("${value}")`);
+      } else if (lower.includes('navigate') || lower.includes('open') || lower.includes('go to')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const url = match ? match[1] : '/';
+        lines.push(`    driver.get("${url}")`);
+      } else if (lower.includes('verify') || lower.includes('check') || lower.includes('should') || lower.includes('expect')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const text = match ? match[1] : 'text';
+        lines.push(`    assert "${text}" in driver.find_element(By.TAG_NAME, "body").text`);
+      } else {
+        lines.push(`    # Action: ${cleanStep}`);
+      }
+      lines.push('');
+    });
+    return lines.join('\n');
+  };
+
+  const convertToRobotFramework = (tc) => {
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+
+    let lines = [];
+    lines.push(`*** Settings ***`);
+    lines.push(`Library    SeleniumLibrary\n`);
+    lines.push(`*** Test Cases ***`);
+    lines.push(`${idClean} ${tc.title}`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      lines.push(`    [Setup]    Log    Preconditions: ${tc.preconditions.replace(/\n/g, ' ')}`);
+    }
+
+    stepsList.forEach((step) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      const lower = cleanStep.toLowerCase();
+      if (lower.includes('click') || lower.includes('tap') || lower.includes('press')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const target = match ? match[1] : 'button';
+        lines.push(`    Click Element    xpath=//*[contains(text(), '${target}')]`);
+      } else if (lower.includes('enter') || lower.includes('type') || lower.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const value = matchText && matchText[0] ? matchText[0].replace(/['"]/g, '') : 'data';
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '') : 'input';
+        lines.push(`    Input Text    css=input[name='${field}']    ${value}`);
+      } else if (lower.includes('navigate') || lower.includes('open') || lower.includes('go to')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const url = match ? match[1] : '/';
+        lines.push(`    Go To    ${url}`);
+      } else if (lower.includes('verify') || lower.includes('check') || lower.includes('should') || lower.includes('expect')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const text = match ? match[1] : 'text';
+        lines.push(`    Page Should Contain    ${text}`);
+      } else {
+        lines.push(`    # Action: ${cleanStep}`);
+      }
+    });
+    
+    lines.push(`    [Teardown]    Close Browser`);
+    return lines.join('\n');
+  };
+
+  const convertToCucumberStepDefs = (tc) => {
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+    
+    let lines = [];
+    lines.push(`const { Given, When, Then } = require('@cucumber/cucumber');\n`);
+    
+    if (tc.preconditions && tc.preconditions !== 'N/A') {
+      const cleanPre = tc.preconditions.replace(/^\[AC\d+\]\s*/i, '').trim();
+      lines.push(`Given('the precondition state matches: ${cleanPre}', async () => {`);
+      lines.push(`  // TODO: Add setup logic`);
+      lines.push(`});\n`);
+    }
+
+    stepsList.forEach((step) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      const lower = cleanStep.toLowerCase();
+      let verb = 'When';
+      if (lower.includes('verify') || lower.includes('check') || lower.includes('should') || lower.includes('assert')) {
+        verb = 'Then';
+      }
+      lines.push(`${verb}('user executes step: ${cleanStep}', async () => {`);
+      if (lower.includes('click')) {
+        lines.push(`  await page.click('text="${cleanStep.match(/['"]([^'"]+)['"]/)?.[1] || 'button'}"');`);
+      } else {
+        lines.push(`  // Action mapping placeholder`);
+      }
+      lines.push(`});\n`);
+    });
+    return lines.join('\n');
+  };
+
+  const generatePOMTemplate = (tc) => {
+    const idClean = tc.customId || tc.id;
+    const stepsList = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+    
+    let lines = [];
+    lines.push(`export class ${idClean}_Page {`);
+    lines.push(`  constructor(page) {`);
+    lines.push(`    this.page = page;`);
+    
+    let methods = [];
+    stepsList.forEach((step) => {
+      const cleanStep = step.replace(/^\d+[\.\)\s-]+\s*/, '').trim();
+      const lower = cleanStep.toLowerCase();
+      
+      if (lower.includes('click') || lower.includes('tap')) {
+        const match = cleanStep.match(/['"]([^'"]+)['"]/);
+        const name = match ? match[1].replace(/[^a-zA-Z]/g, '') : 'Button';
+        lines.push(`    this.${name.toLowerCase()}Btn = page.locator('text="${match?.[1] || 'button'}"');`);
+        methods.push(`  async click${name}() {\n    await this.${name.toLowerCase()}Btn.click();\n  }`);
+      } else if (lower.includes('enter') || lower.includes('type') || lower.includes('fill')) {
+        const matchText = cleanStep.match(/['"]([^'"]+)['"]/g);
+        const field = matchText && matchText[1] ? matchText[1].replace(/['"]/g, '').replace(/[^a-zA-Z]/g, '') : 'Input';
+        lines.push(`    this.${field.toLowerCase()}Input = page.locator('input[name="${field.toLowerCase()}"]');`);
+        methods.push(`  async fill${field}(value) {\n    await this.${field.toLowerCase()}Input.fill(value);\n  }`);
+      }
+    });
+    
+    lines.push(`  }\n`);
+    lines.push(methods.join('\n\n'));
+    lines.push(`}`);
+    return lines.join('\n');
+  };
+
+  const convertToPlaywrightPOM = (tc) => {
+    const idClean = tc.customId || tc.id;
+    return `// Playwright Spec Page Object Model implementation\nimport { test, expect } from '@playwright/test';\nimport { ${idClean}_Page } from './${idClean}_Page';\n\ntest('${idClean}: Page Object verification', async ({ page }) => {\n  const pageObj = new ${idClean}_Page(page);\n  await page.goto('/');\n  // Execute page class action methods\n});`;
+  };
+
+  const convertToCypressPOM = (tc) => {
+    const idClean = tc.customId || tc.id;
+    return `// Cypress POM implementation\nclass ${idClean}_Page {\n  visit() {\n    cy.visit('/');\n  }\n}\n\ndescribe('${idClean} POM Test', () => {\n  const page = new ${idClean}_Page();\n  it('should execute POM actions', () => {\n    page.visit();\n  });\n});`;
+  };
+
+  const convertToJSONPayload = (tc) => {
+    const text = (tc.steps || '') + '\n' + (tc.preconditions || '');
+    const quoted = text.match(/['"]([^'"]+)['"]/g);
+    let payload = {};
+    if (quoted) {
+      quoted.forEach(q => {
+        const clean = q.replace(/['"]/g, '');
+        const parts = clean.split(/[:=]/);
+        if (parts.length === 2) {
+          payload[parts[0].trim()] = parts[1].trim();
+        } else {
+          const lower = clean.toLowerCase();
+          if (lower.includes('@') && lower.includes('.')) {
+            payload['email'] = clean;
+          } else if (lower === 'admin' || lower === 'user' || lower === 'manager') {
+            payload['role'] = clean;
+          } else if (/^\d+$/.test(clean)) {
+            payload['id'] = parseInt(clean);
+          } else if (clean.length > 0 && clean.length < 15) {
+            if (!payload['name']) payload['name'] = clean;
+            else if (!payload['status']) payload['status'] = clean;
+          }
+        }
+      });
+    }
+    
+    if (Object.keys(payload).length === 0) {
+      payload = {
+        "status": "active",
+        "timestamp": new Date().toISOString(),
+        "notes": "Generated from test case steps"
+      };
+    }
+    return JSON.stringify(payload, null, 2);
+  };
+
+  const handleBulkExport = (framework) => {
+    if (testCases.length === 0) return;
+    let content = '';
+    let filename = `QAutopilot_${framework}_Suite`;
+    let ext = 'js';
+
+    if (framework === 'playwright') {
+      content = testCases.map(tc => convertToPlaywright(tc)).join('\n\n');
+      ext = 'spec.js';
+    } else if (framework === 'cypress') {
+      content = testCases.map(tc => convertToCypress(tc)).join('\n\n');
+      ext = 'spec.js';
+    } else if (framework === 'playwright_pom') {
+      content = testCases.map(tc => {
+        return `// ===== PAGE OBJECT CLASS =====\n${generatePOMTemplate(tc)}\n\n// ===== SPEC FILE =====\n${convertToPlaywrightPOM(tc)}`;
+      }).join('\n\n// ==========================================================================\n\n');
+      ext = 'spec.js';
+    } else if (framework === 'cypress_pom') {
+      content = testCases.map(tc => convertToCypressPOM(tc)).join('\n\n');
+      ext = 'spec.js';
+    } else if (framework === 'selenium_java') {
+      content = testCases.map(tc => convertToSeleniumJava(tc)).join('\n\n');
+      ext = 'java';
+    } else if (framework === 'selenium_python') {
+      content = testCases.map(tc => convertToSeleniumPython(tc)).join('\n\n');
+      ext = 'py';
+    } else if (framework === 'playwright_python') {
+      content = testCases.map(tc => {
+        const titleClean = tc.title ? tc.title.replace(/'/g, "\\'") : 'Test Case';
+        const idClean = tc.customId || tc.id;
+        return `from playwright.sync_api import Page, expect\n\ndef test_${idClean.toLowerCase()}_${tc.title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}(page: Page):\n    # ${tc.preconditions || 'N/A'}\n    # ${tc.steps.replace(/\n/g, '\n    # ')}\n    pass`;
+      }).join('\n\n');
+      ext = 'py';
+    } else if (framework === 'robot') {
+      content = testCases.map(tc => convertToRobotFramework(tc)).join('\n\n');
+      ext = 'robot';
+    } else if (framework === 'cucumber') {
+      content = testCases.map(tc => convertToCucumberStepDefs(tc)).join('\n\n');
+      ext = 'js';
+    }
+
+    const element = document.createElement("a");
+    const file = new Blob([content], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `${filename}.${ext}`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const handleDownloadFuzzedData = async () => {
+    if (!activeStory) {
+      alert('Please load a user story first.');
+      return;
+    }
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/api/generate-fuzzed-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: activeStory.id })
+      });
+      const csvText = await res.text();
+      
+      const element = document.createElement("a");
+      const file = new Blob([csvText], {type: 'text/csv'});
+      element.href = URL.createObjectURL(file);
+      element.download = `QAutopilot_FuzzedData_${activeStory.id}.csv`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate fuzzed CSV data');
+    }
+  };
+
+  const handleExploreBoundaries = async () => {
+    if (!activeStory && !userStory.trim()) {
+      alert('Please load or generate a test suite first.');
+      return;
+    }
+    setIsExploringBoundaries(true);
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      let currentStoryId = activeStory?.id;
+      if (!currentStoryId) {
+        alert('Please generate the test suite first to establish requirements boundaries.');
+        setIsExploringBoundaries(false);
+        return;
+      }
+
+      const res = await fetch(`${BACKEND_URL}/api/explore-boundaries`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: currentStoryId })
+      });
+      const data = await res.json();
+      setBoundarySuggestions(data.inputs || []);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to explore fuzzer boundaries');
+    } finally {
+      setIsExploringBoundaries(false);
+    }
+  };
+
+  const handleGenerateStrategy = async () => {
+    if (!activeStory) return;
+    setIsGeneratingStrategy(true);
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/api/generate-strategy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: activeStory.id })
+      });
+      const data = await res.json();
+      setTestStrategyText(data.strategy || '');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate master test strategy');
+    } finally {
+      setIsGeneratingStrategy(false);
+    }
+  };
+
+  const handleGenerateTargetedTc = async (acContent, index) => {
+    if (!activeStory) return;
+    if (index !== 999) setGeneratingAcIndex(index);
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/api/generate-targeted-tc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: activeStory.id, acContent })
+      });
+      const data = await res.json();
+      if (data.success && data.testCases) {
+        setTestCases(prev => [...prev, ...data.testCases]);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate targeted test case');
+    } finally {
+      if (index !== 999) setGeneratingAcIndex(null);
+    }
+  };
+
+  const handleOptimizeSuite = async () => {
+    if (!activeStory) return;
+    setIsOptimizingSuite(true);
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/api/optimize-suite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: activeStory.id })
+      });
+      const data = await res.json();
+      if (data.testCases) {
+        setTestCases(data.testCases);
+        alert('Test suite successfully optimized and fuzzed with AI!');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to optimize test suite');
+    } finally {
+      setIsOptimizingSuite(false);
+    }
+  };
+
+  const exportHTMLRunReport = (cases) => {
+    const total = cases.length;
+    const passed = cases.filter(c => c.executionStatus === 'Passed').length;
+    const failed = cases.filter(c => c.executionStatus === 'Failed').length;
+    const blocked = cases.filter(c => c.executionStatus === 'Blocked').length;
+    
+    let htmlLines = [];
+    htmlLines.push(`<!DOCTYPE html>`);
+    htmlLines.push(`<html>`);
+    htmlLines.push(`<head>`);
+    htmlLines.push(`  <meta charset="utf-8">`);
+    htmlLines.push(`  <title>QAutopilot Test Run Report</title>`);
+    htmlLines.push(`  <style>`);
+    htmlLines.push(`    body { font-family: 'Inter', system-ui, sans-serif; background-color: #f9fafb; color: #111827; padding: 40px; margin: 0; }`);
+    htmlLines.push(`    .container { max-width: 900px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }`);
+    htmlLines.push(`    .header { border-bottom: 2px solid #f3f4f6; padding-bottom: 20px; margin-bottom: 24px; }`);
+    htmlLines.push(`    .title { font-size: 28px; font-weight: 700; color: #4f46e5; margin: 0; }`);
+    htmlLines.push(`    .subtitle { font-size: 14px; color: #6b7280; margin-top: 4px; }`);
+    htmlLines.push(`    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }`);
+    htmlLines.push(`    .card { padding: 16px; border-radius: 8px; font-weight: 600; text-align: center; }`);
+    htmlLines.push(`    .card-total { background: #f3f4f6; color: #374151; }`);
+    htmlLines.push(`    .card-passed { background: #d1fae5; color: #065f46; }`);
+    htmlLines.push(`    .card-failed { background: #fee2e2; color: #991b1b; }`);
+    htmlLines.push(`    .card-blocked { background: #fef3c7; color: #92400e; }`);
+    htmlLines.push(`    .val { font-size: 24px; font-weight: 700; display: block; }`);
+    htmlLines.push(`    .table { width: 100%; border-collapse: collapse; margin-top: 16px; }`);
+    htmlLines.push(`    .th { text-align: left; padding: 12px; background: #f3f4f6; font-size: 12px; text-transform: uppercase; color: #4b5563; }`);
+    htmlLines.push(`    .td { padding: 12px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }`);
+    htmlLines.push(`    .badge { padding: 4px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; }`);
+    htmlLines.push(`    .badge-passed { background: #d1fae5; color: #065f46; }`);
+    htmlLines.push(`    .badge-failed { background: #fee2e2; color: #991b1b; }`);
+    htmlLines.push(`    .badge-blocked { background: #fef3c7; color: #92400e; }`);
+    htmlLines.push(`  </style>`);
+    htmlLines.push(`</head>`);
+    htmlLines.push(`<body>`);
+    htmlLines.push(`  <div class="container">`);
+    htmlLines.push(`    <div class="header">`);
+    htmlLines.push(`      <h1 class="title">QAutopilot Execution Report</h1>`);
+    htmlLines.push(`      <div class="subtitle">Generated on ${new Date().toLocaleString()}</div>`);
+    htmlLines.push(`    </div>`);
+    htmlLines.push(`    <div class="grid">`);
+    htmlLines.push(`      <div class="card card-total"><span class="val">${total}</span>Total Cases</div>`);
+    htmlLines.push(`      <div class="card card-passed"><span class="val">${passed}</span>Passed</div>`);
+    htmlLines.push(`      <div class="card card-failed"><span class="val">${failed}</span>Failed</div>`);
+    htmlLines.push(`      <div class="card card-blocked"><span class="val">${blocked}</span>Blocked</div>`);
+    htmlLines.push(`    </div>`);
+    htmlLines.push(`    <h2>Run Details</h2>`);
+    htmlLines.push(`    <table class="table">`);
+    htmlLines.push(`      <thead>`);
+    htmlLines.push(`        <tr>`);
+    htmlLines.push(`          <th class="th">ID</th>`);
+    htmlLines.push(`          <th class="th">Test Case Title</th>`);
+    htmlLines.push(`          <th class="th">Type</th>`);
+    htmlLines.push(`          <th class="th">Status</th>`);
+    htmlLines.push(`          <th class="th">Execution Comments</th>`);
+    htmlLines.push(`        </tr>`);
+    htmlLines.push(`      </thead>`);
+    htmlLines.push(`      <tbody>`);
+    
+    cases.forEach(c => {
+      const statusClass = c.executionStatus === 'Passed' ? 'badge-passed' : (c.executionStatus === 'Failed' ? 'badge-failed' : 'badge-blocked');
+      htmlLines.push(`        <tr>`);
+      htmlLines.push(`          <td class="td" style="font-weight: 700;">${c.customId || c.id}</td>`);
+      htmlLines.push(`          <td class="td">${c.title}</td>`);
+      htmlLines.push(`          <td class="td">${c.type}</td>`);
+      htmlLines.push(`          <td class="td"><span class="badge ${statusClass}">${c.executionStatus || 'Pending'}</span></td>`);
+      htmlLines.push(`          <td class="td" style="color: #6b7280; font-style: italic;">${c.executionComments || 'N/A'}</td>`);
+      htmlLines.push(`        </tr>`);
+    });
+    
+    htmlLines.push(`      </tbody>`);
+    htmlLines.push(`    </table>`);
+    htmlLines.push(`  </div>`);
+    htmlLines.push(`</body>`);
+    htmlLines.push(`</html>`);
+    
+    const element = document.createElement("a");
+    const file = new Blob([htmlLines.join('\n')], {type: 'text/html'});
+    element.href = URL.createObjectURL(file);
+    element.download = `QAutopilot_RunReport_${Date.now()}.html`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const generateJiraBugTemplate = (tc, comments) => {
+    return `*Summary:* [Bug] Failed validation in: ${tc.title}
+*Environment:* QA / Staging Sandbox
+*Severity:* Major / High
+
+*Preconditions:*
+${tc.preconditions || 'N/A'}
+
+*Steps to Reproduce:*
+${tc.steps}
+
+*Observed Result:*
+${comments || 'Step verification failed during dry-run simulation.'}
+
+*Expected Result:*
+${tc.expectedResult}
+
+----
+_Reported via QAutopilot Execution Engine_`;
+  };
+
   const startDryRun = () => {
     if (testCases.length === 0) return;
     setDryRunCases(testCases);
@@ -1293,6 +1867,9 @@ export default function ChatAssistant() {
           <button className={`tab-btn ${activeTab === 'repository' ? 'active' : ''}`} onClick={() => setActiveTab('repository')}>
             Test Cases Repository ({testCases.length})
           </button>
+          <button className={`tab-btn ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>
+            📋 Master Test Strategy
+          </button>
           <button className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
             QA Analytics & Coverage
           </button>
@@ -1385,6 +1962,15 @@ export default function ChatAssistant() {
                     style={{ flex: 1, margin: 0 }}
                   >
                     {isTyping ? 'Generating Test Cases...' : '✨ Generate Test Suite'}
+                  </button>
+                  <button
+                    className="generate-btn reset"
+                    onClick={handleExploreBoundaries}
+                    disabled={isExploringBoundaries || isTyping || !activeStory}
+                    style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.2)', padding: '0 16px', margin: 0 }}
+                    title="Fuzz boundaries and security scenarios"
+                  >
+                    {isExploringBoundaries ? '🛡️ Fuzzing...' : '🛡️ Fuzz boundaries'}
                   </button>
                   <button
                     className="generate-btn reset"
@@ -1485,14 +2071,16 @@ export default function ChatAssistant() {
                     <button className="btn-secondary" onClick={() => importInputRef.current?.click()}>
                       📥 Import (.JSON/.CSV)
                     </button>
-                    <button className="btn-secondary" onClick={() => handleExport('json')}>
-                      📤 Export JSON
-                    </button>
-                    <button className="btn-secondary" onClick={() => handleExport('csv')}>
-                      📊 Export CSV
-                    </button>
                     <button className="btn-secondary" onClick={() => setIsExportModalOpen(true)} style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
-                      💼 Jira Export
+                      📤 Exporters
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={handleOptimizeSuite}
+                      disabled={isOptimizingSuite}
+                      style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}
+                    >
+                      {isOptimizingSuite ? '⚡ Optimizing...' : '✨ Optimize Suite'}
                     </button>
                     <button className="btn-primary" onClick={startDryRun} style={{ background: 'var(--primary)', boxShadow: '0 4px 12px var(--primary-glow)' }}>
                       ▶️ Start Dry-Run
@@ -1882,6 +2470,72 @@ export default function ChatAssistant() {
                                 </div>
                               </div>
                             );
+                          } else if (currentView === 'playwright_pom') {
+                            return (
+                              <div className="tc-details playwright-details">
+                                <div className="detail-row">
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">Playwright POM Spec & Page Class</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(`// ===== PAGE OBJECT CLASS =====\n${generatePOMTemplate(tc)}\n\n// ===== SPEC FILE =====\n${convertToPlaywrightPOM(tc)}`);
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy POM'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy POM
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {`// ===== PAGE OBJECT CLASS =====\n${generatePOMTemplate(tc)}\n\n// ===== SPEC FILE =====\n${convertToPlaywrightPOM(tc)}`}
+                                  </pre>
+                                </div>
+                              </div>
+                            );
+                          } else if (currentView === 'cypress_pom') {
+                            return (
+                              <div className="tc-details cypress-details">
+                                <div className="detail-row">
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">Cypress POM Spec & Page Class</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(convertToCypressPOM(tc));
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy POM'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy POM
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {convertToCypressPOM(tc)}
+                                  </pre>
+                                </div>
+                              </div>
+                            );
+                          } else if (currentView === 'json_payload') {
+                            return (
+                              <div className="tc-details json-details">
+                                <div className="detail-row">
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span className="detail-label">Mock API Request Payload</span>
+                                    <button className="copy-bdd-btn" onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(convertToJSONPayload(tc));
+                                      const btn = e.target;
+                                      btn.textContent = '✅ Copied!';
+                                      setTimeout(() => { btn.textContent = '📋 Copy Payload'; }, 1500);
+                                    }} style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--text-sub)' }}>
+                                      📋 Copy Payload
+                                    </button>
+                                  </div>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                    {convertToJSONPayload(tc)}
+                                  </pre>
+                                </div>
+                              </div>
+                            );
                           } else {
                             return (
                               <div className="tc-details">
@@ -2026,6 +2680,9 @@ export default function ChatAssistant() {
                             <option value="gherkin">🤖 BDD (Gherkin)</option>
                             <option value="playwright">🎭 Playwright Code</option>
                             <option value="cypress">🌲 Cypress Code</option>
+                            <option value="playwright_pom">🎭 Playwright POM</option>
+                            <option value="cypress_pom">🌲 Cypress POM</option>
+                            <option value="json_payload">🔌 JSON Payload</option>
                           </select>
                           <button className="card-action-btn" onClick={() => handleEditClick(tc)}>
                             ✏️ Edit
@@ -2080,6 +2737,64 @@ export default function ChatAssistant() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Master Test Strategy */}
+        {activeTab === 'strategy' && (
+          <div className="tab-content" style={{ overflowY: 'auto', padding: '24px' }}>
+            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontFamily: 'Outfit, sans-serif' }}>Master Test Strategy & Plan</h2>
+                <span className="repo-subtitle">
+                  Formal methodology and testing strategy scope for: <strong>{activeStory ? activeStory.title : 'No active user story'}</strong>
+                </span>
+              </div>
+              {activeStory && (
+                <button
+                  className="btn-primary"
+                  onClick={handleGenerateStrategy}
+                  disabled={isGeneratingStrategy}
+                  style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}
+                >
+                  {isGeneratingStrategy ? 'Drafting Strategy...' : '⚙️ Compile Test Strategy'}
+                </button>
+              )}
+            </div>
+
+            {!activeStory ? (
+              <div className="empty-state">
+                <h3>No active user story loaded</h3>
+                <p>Please load a user story from history or generator to view the strategy.</p>
+              </div>
+            ) : (
+              <div className="strategy-container-card" style={{ padding: '24px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '16px', minHeight: '400px' }}>
+                {testStrategyText ? (
+                  <div className="strategy-viewer">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>📝 Markdown Editor Mode</span>
+                      <button className="copy-bdd-btn" onClick={() => {
+                        navigator.clipboard.writeText(testStrategyText);
+                        alert('Test Strategy copied to clipboard!');
+                      }} style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                        📋 Copy Plan
+                      </button>
+                    </div>
+                    <textarea
+                      value={testStrategyText}
+                      onChange={(e) => setTestStrategyText(e.target.value)}
+                      style={{ width: '100%', minHeight: '500px', background: 'var(--bg-app)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.5' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="empty-state" style={{ border: 'none', margin: '80px auto' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                    <h3>No strategy compiled yet</h3>
+                    <p>Click "Compile Test Strategy" to analyze requirements and draft a master testing methodology.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2289,6 +3004,45 @@ export default function ChatAssistant() {
                   </div>
                 </div>
 
+                {/* Visual Test Journey Flow Map */}
+                <div className="rtm-container-card" style={{ marginTop: '24px', padding: '20px', marginBottom: '24px' }}>
+                  <h3>Visual Test Journey Flow Map</h3>
+                  <p className="rtm-desc">Graphical map of functional steps, decision points, and verification outcomes derived from the requirements.</p>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', padding: '24px', background: 'var(--bg-app)', borderRadius: '12px', overflowX: 'auto', border: '1px solid var(--border-color)', marginTop: '12px' }}>
+                    <div style={{ padding: '12px 20px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', borderRadius: '8px', fontWeight: '700', fontSize: '13px', boxShadow: '0 4px 12px var(--primary-glow)' }}>
+                      🏁 START
+                    </div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" strokeWidth="2.5">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                    <div style={{ padding: '12px 20px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-main)', fontWeight: '600' }}>
+                      ⚙️ Inputs & Setup
+                    </div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" strokeWidth="2.5">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                    <div style={{ padding: '12px 20px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-main)', fontWeight: '600', position: 'relative' }}>
+                      ⚡ Logic Validation
+                      <div style={{ position: 'absolute', top: '-18px', left: '50%', transform: 'translateX(-50%)', fontSize: '10px', color: 'var(--security-color)', fontWeight: '700' }}>BVA/EP</div>
+                    </div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" strokeWidth="2.5">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ padding: '10px 16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', color: 'var(--positive-color)', borderRadius: '8px', fontSize: '12.5px', fontWeight: '600' }}>
+                        ✅ Success State
+                      </div>
+                      <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: 'var(--negative-color)', borderRadius: '8px', fontSize: '12.5px', fontWeight: '600' }}>
+                        ❌ Error Handling
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Requirement Traceability Matrix (RTM) */}
                 <div className="rtm-container-card">
                   <h3>Requirement Traceability Matrix (RTM)</h3>
@@ -2321,9 +3075,33 @@ export default function ChatAssistant() {
                               <td className="rtm-ac-id" style={{ padding: '10px', fontSize: '12px', fontWeight: '600', color: 'var(--primary)' }}>AC-{idx + 1}</td>
                               <td className="rtm-ac-content" style={{ padding: '10px', fontSize: '12.5px', color: 'var(--text-main)', lineHeight: '1.4' }}>{ac.content}</td>
                               <td style={{ padding: '10px' }}>
-                                <span className={`rtm-badge ${isCovered ? 'covered' : 'uncovered'}`} style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: '600', background: isCovered ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: isCovered ? 'var(--positive-color)' : 'var(--negative-color)' }}>
-                                  {isCovered ? 'Covered' : 'Uncovered'}
-                                </span>
+                                {isCovered ? (
+                                  <span className="rtm-badge covered" style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: '600', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)' }}>
+                                    Covered
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleGenerateTargetedTc(ac.content, idx)}
+                                    disabled={generatingAcIndex === idx}
+                                    style={{
+                                      padding: '3px 8px',
+                                      borderRadius: '4px',
+                                      fontSize: '10.5px',
+                                      fontWeight: '600',
+                                      background: 'rgba(239, 68, 68, 0.1)',
+                                      color: 'var(--negative-color)',
+                                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    title="Click to generate targeted test cases for this criterion"
+                                  >
+                                    {generatingAcIndex === idx ? '⚡ Gen...' : '➕ Uncovered'}
+                                  </button>
+                                )}
                               </td>
                               <td className="rtm-mappings" style={{ padding: '10px' }}>
                                 {isCovered ? (
@@ -2522,7 +3300,16 @@ export default function ChatAssistant() {
                     </div>
                     
                     <div className="form-group" style={{ marginTop: '16px' }}>
-                      <label>Execution Comments / Run Notes</label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ margin: 0 }}>Execution Comments / Run Notes</label>
+                        <button 
+                          onClick={() => setJiraBugText(generateJiraBugTemplate(tc, dryRunComments))}
+                          style={{ background: 'none', border: 'none', color: 'var(--negative-color)', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          title="Generate a structured Jira bug report template for this failure"
+                        >
+                          🐞 Log Jira Bug
+                        </button>
+                      </div>
                       <textarea
                         className="sidebar-textarea"
                         placeholder="Log test outcomes, observed errors, version numbers, or blocker descriptions..."
@@ -2581,7 +3368,10 @@ export default function ChatAssistant() {
                   </div>
                 </div>
                 
-                <div className="modal-actions" style={{ justifyContent: 'center', marginTop: '24px' }}>
+                <div className="modal-actions" style={{ justifyContent: 'center', marginTop: '24px', gap: '10px' }}>
+                  <button className="btn-secondary" onClick={() => exportHTMLRunReport(dryRunCases)} style={{ background: 'rgba(79, 70, 229, 0.08)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
+                    📄 Export HTML Run Report
+                  </button>
                   <button className="btn-primary" onClick={() => setDryRunCases(null)}>
                     Close Simulator
                   </button>
@@ -2592,44 +3382,153 @@ export default function ChatAssistant() {
         </div>
       )}
 
-      {/* Jira Export Modal */}
+      {/* Universal Exporter Modal */}
       {isExportModalOpen && (
         <div className="modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="modal-content" style={{ maxWidth: '700px', width: '90%' }}>
+          <div className="modal-content" style={{ maxWidth: '650px', width: '90%' }}>
             <div className="modal-header">
-              <h3>Jira QA Exporter</h3>
+              <h3>Universal QA Exporter</h3>
               <button className="modal-close" onClick={() => setIsExportModalOpen(false)}>✕</button>
             </div>
             
             <div className="export-modal-tabs" style={{ padding: '10px 0' }}>
               <div className="export-info-text" style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '16px', lineHeight: '1.4' }}>
-                Generate formatted artifacts ready to copy directly into your Jira issue description.
+                Export fuzzed test suites, bulk automation code, and Jira descriptions.
               </div>
               
-              <div className="export-section" style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '13.5px' }}>Jira Description Markdown Table:</strong>
-                  <button className="copy-bdd-btn" onClick={(e) => {
+              <div className="export-section" style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>1. Jira Description Markdown Table:</strong>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <button className="copy-bdd-btn" onClick={() => {
                     navigator.clipboard.writeText(getJiraMarkdown());
-                    const btn = e.target;
-                    btn.textContent = '✅ Copied!';
-                    setTimeout(() => { btn.textContent = '📋 Copy Table Markdown'; }, 1500);
-                  }} style={{ padding: '4px 10px', fontSize: '11.5px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-sidebar)', cursor: 'pointer', color: 'var(--primary)', fontWeight: '600' }}>
+                    alert('Jira Table copied!');
+                  }} style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
                     📋 Copy Table Markdown
                   </button>
                 </div>
-                <textarea
-                  readOnly
-                  className="export-markdown-textarea"
-                  value={getJiraMarkdown()}
-                  style={{ width: '100%', height: '160px', fontFamily: 'monospace', fontSize: '11.5px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', color: 'var(--text-main)', resize: 'none' }}
-                />
+              </div>
+
+              <div className="export-section" style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>2. Bulk Test Automation Suite Exporter:</strong>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('playwright')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🎭 Playwright spec</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('playwright_pom')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🎭 Playwright POM</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('cypress')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🌲 Cypress spec</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('cypress_pom')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🌲 Cypress POM</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('selenium_java')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>☕ Selenium Java</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('selenium_python')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🐍 Selenium Python</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('playwright_python')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🐍 Playwright Python</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('robot')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🤖 Robot framework</button>
+                  <button className="btn-secondary" onClick={() => handleBulkExport('cucumber')} style={{ padding: '4px 8px', fontSize: '11.5px' }}>🥒 Cucumber Glue</button>
+                </div>
+              </div>
+
+              <div className="export-section" style={{ marginBottom: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>3. Advanced Test Data Fuzzers:</strong>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button className="btn-secondary" onClick={handleDownloadFuzzedData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(99, 102, 241, 0.05)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
+                    📊 Download 100-Row CSV Dataset
+                  </button>
+                </div>
               </div>
             </div>
             
             <div className="modal-actions" style={{ marginTop: '20px' }}>
               <button className="btn-secondary" onClick={() => setIsExportModalOpen(false)}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Boundary & Fuzzing Explorer Modal */}
+      {boundarySuggestions && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '600px', width: '90%' }}>
+            <div className="modal-header">
+              <h3>🛡️ Boundary & Fuzzing Explorer</h3>
+              <button className="modal-close" onClick={() => setBoundarySuggestions(null)}>✕</button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '16px' }}>
+              Suggested boundary limits and security payloads specifically fuzzed for the requirement fields:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+              {boundarySuggestions.map((input, idx) => (
+                <div key={idx} style={{ padding: '14px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--primary)', fontSize: '14px' }}>Field: {input.fieldName}</h4>
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong style={{ fontSize: '12px', display: 'block', color: 'var(--text-main)' }}>Equivalence Boundaries (BVA):</strong>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {input.boundaries.map((b, i) => (
+                        <span key={i} style={{ background: 'var(--bg-glass)', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>{b}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '12px', display: 'block', color: 'var(--text-main)' }}>Fuzzing Security Payloads:</strong>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {input.securityPayloads.map((p, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            handleGenerateTargetedTc(`Test field "${input.fieldName}" with fuzz payload: ${p}`, 999);
+                            alert(`Fuzzing scenario queued for payload: ${p}`);
+                          }}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.05)',
+                            fontSize: '11.5px',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            color: 'var(--negative-color)',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                          }}
+                          title="Click to generate fuzzed test case"
+                        >
+                          {p} ➕
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions" style={{ marginTop: '20px' }}>
+              <button className="btn-secondary" onClick={() => setBoundarySuggestions(null)}>
+                Close Explorer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jira Bug Ticket Modal */}
+      {jiraBugText && (
+        <div className="modal-backdrop" style={{ zIndex: 1200 }}>
+          <div className="modal-content" style={{ maxWidth: '550px', width: '90%' }}>
+            <div className="modal-header">
+              <h3>🐞 Jira Bug Ticket Markdown</h3>
+              <button className="modal-close" onClick={() => setJiraBugText(null)}>✕</button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-sub)', marginBottom: '12px' }}>
+              Copy this structured bug description directly into your Jira issue template:
+            </p>
+            <textarea
+              readOnly
+              value={jiraBugText}
+              style={{ width: '100%', height: '220px', fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', color: 'var(--text-main)', resize: 'none' }}
+            />
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn-secondary" onClick={() => setJiraBugText(null)}>
+                Close
+              </button>
+              <button className="btn-primary" onClick={() => {
+                navigator.clipboard.writeText(jiraBugText);
+                alert('Bug template copied!');
+              }}>
+                📋 Copy Markdown
               </button>
             </div>
           </div>

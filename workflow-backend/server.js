@@ -2625,6 +2625,382 @@ app.post('/api/user-stories/:id/import-test-cases', async (req, res) => {
   }
 });
 
+// --- NEW QAUTOPILOT ADVANCED API ENDPOINTS ---
+
+// HELPER: Call AI Generic
+async function callAiGeneric(promptText, provider, apiKey, isJson = false) {
+  if (!apiKey) {
+    throw new Error('API Key is missing');
+  }
+  if (provider === 'claude') {
+    const url = 'https://api.anthropic.com/v1/messages';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: promptText }]
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Claude API error: ${response.statusText}`);
+    }
+    const resObj = await response.json();
+    return resObj.content[0].text;
+  } else if (provider === 'chatgpt') {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: promptText }],
+        response_format: isJson ? { type: 'json_object' } : undefined
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+    const resObj = await response.json();
+    return resObj.choices[0].message.content;
+  } else {
+    // Default to Gemini
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }]
+    };
+    if (isJson) {
+      payload.generationConfig = { responseMimeType: 'application/json' };
+    }
+    const resData = await callGeminiApi(payload, apiKey);
+    return resData.candidates[0].content.parts[0].text;
+  }
+}
+
+// POST Optimize test suite
+app.post('/api/optimize-suite', async (req, res) => {
+  try {
+    const { storyId } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    const story = await prisma.userStory.findUnique({
+      where: { id: storyId },
+      include: { acceptanceCriteria: true, testCases: true }
+    });
+
+    if (!story) {
+      return res.status(404).json({ error: 'User Story not found' });
+    }
+
+    const acText = story.acceptanceCriteria.map(ac => ac.content).join('\n');
+    let updatedCases = [];
+
+    if (!apiKey) {
+      // Offline fallback: slightly optimize current test cases by appending mock verification
+      updatedCases = story.testCases.map(tc => ({
+        ...tc,
+        title: tc.title + ' [AI Optimized]',
+        steps: tc.steps + '\n*. Verify input bounds and edge values.'
+      }));
+    } else {
+      const promptText = `You are a world-class QA Optimization Engineer. You are given a User Story, its Acceptance Criteria, and a set of manual test cases.
+Please optimize, self-heal, and refine these test cases to:
+1. Inject explicit, specific boundary values and equivalence class test data (BVA/EP) into the test steps (e.g. replace placeholders like "enter valid name" with realistic values like "Johnathan").
+2. Ensure preconditions and expected results contain exact verifications.
+3. Absolutely exclude any visual/UI formatting checks, generic performance SLAs, or default connectivity warnings.
+4. Keep the original ID mapping if updating existing cases.
+
+User Story:
+${story.description}
+
+Acceptance Criteria:
+${acText}
+
+Current Test Cases (JSON):
+${JSON.stringify(story.testCases)}
+
+Output optimized test cases as a JSON object containing a "testCases" array matching this exact schema:
+{
+  "testCases": [
+    {
+      "id": "TC...",
+      "customId": "TC001",
+      "title": "...",
+      "type": "Positive" | "Negative" | "Edge" | "Security" | "Performance",
+      "preconditions": "...",
+      "steps": "1. ...\n2. ...",
+      "expectedResult": "...",
+      "priority": "High" | "Medium" | "Low"
+    }
+  ]
+}`;
+
+      const resText = await callAiGeneric(promptText, provider, apiKey, true);
+      const parsed = parseCleanJson(resText);
+      updatedCases = parsed.testCases || [];
+    }
+
+    if (updatedCases.length > 0) {
+      // Overwrite database cases
+      await prisma.testCase.deleteMany({ where: { userStoryId: storyId } });
+      const saved = [];
+      for (const tc of updatedCases) {
+        const newTc = await prisma.testCase.create({
+          data: {
+            id: tc.id && tc.id.startsWith('TC-') ? tc.id : 'TC-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+            customId: tc.customId || 'TC001',
+            title: tc.title,
+            type: tc.type || 'Positive',
+            preconditions: tc.preconditions || 'N/A',
+            steps: tc.steps,
+            expectedResult: tc.expectedResult,
+            priority: tc.priority || 'Medium',
+            userStoryId: storyId
+          }
+        });
+        saved.push(newTc);
+      }
+      return res.json({ success: true, testCases: saved });
+    }
+
+    res.json({ success: true, testCases: story.testCases });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to optimize test suite' });
+  }
+});
+
+// POST Generate Master Test Strategy
+app.post('/api/generate-strategy', async (req, res) => {
+  try {
+    const { storyId } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    const story = await prisma.userStory.findUnique({
+      where: { id: storyId },
+      include: { acceptanceCriteria: true }
+    });
+
+    if (!story) {
+      return res.status(404).json({ error: 'User Story not found' });
+    }
+
+    if (!apiKey) {
+      return res.json({
+        strategy: `# Master Test Plan & Strategy: ${story.title}\n\n*Note: Running in offline heuristic mode.*\n\n## 1. Scope\n- Validate requirement: "${story.title}"\n- Environment: QA Sandbox\n\n## 2. Test Execution Criteria\n- Functional validations must pass.\n- Boundary checking for all fields.`
+      });
+    }
+
+    const acText = story.acceptanceCriteria.map(ac => ac.content).join('\n');
+    const promptText = `Write a comprehensive, professional Master Test Strategy & Test Plan document for the following User Story and Acceptance Criteria.
+Use clean, beautiful Markdown with professional headers, sections, bullet points, and tables where applicable.
+Include:
+1. Document Scope & Summary
+2. Out-of-scope Items
+3. Environment Setup & Prerequisites
+4. Detailed Test Methodology (Positive, Negative, Edge, Security, and Performance boundaries)
+5. Entry, Suspension, and Exit Criteria
+6. Test Deliverables (Automated Scripts, Dry Run Reports)
+
+User Story:
+${story.description}
+
+Acceptance Criteria:
+${acText}
+`;
+
+    const strategyMarkdown = await callAiGeneric(promptText, provider, apiKey, false);
+    res.json({ strategy: strategyMarkdown });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to generate test strategy' });
+  }
+});
+
+// POST Generate Targeted Test Case for specific AC
+app.post('/api/generate-targeted-tc', async (req, res) => {
+  try {
+    const { storyId, acContent } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    const story = await prisma.userStory.findUnique({ where: { id: storyId } });
+    if (!story) {
+      return res.status(404).json({ error: 'User story not found' });
+    }
+
+    let tcs = [];
+    if (!apiKey) {
+      // Mock generation
+      tcs = [{
+        customId: 'TC' + Math.floor(Math.random() * 1000),
+        title: 'Verify targeted flow for: ' + acContent.substring(0, 30),
+        type: 'Positive',
+        preconditions: 'System default state',
+        steps: '1. Navigate to target field.\n2. Perform operation relating to: ' + acContent + '\n3. Submit.',
+        expectedResult: 'Acceptance Criterion is fully verified and matches system specs.',
+        priority: 'High'
+      }];
+    } else {
+      const promptText = `You are a world-class QA Automation Engineer. Generate exactly 2 high-quality, targeted manual test cases that validate the following specific Acceptance Criterion. Do not write test cases for any other requirements.
+
+User Story:
+${story.description}
+
+Target Acceptance Criterion to Cover:
+${acContent}
+
+Output fuzzed validation scenarios as a JSON object containing a "testCases" array matching this exact schema:
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "title": "...",
+      "type": "Positive" | "Negative" | "Edge" | "Security" | "Performance",
+      "preconditions": "...",
+      "steps": "1. ...\n2. ...",
+      "expectedResult": "...",
+      "priority": "High" | "Medium" | "Low"
+    }
+  ]
+}`;
+
+      const resText = await callAiGeneric(promptText, provider, apiKey, true);
+      const parsed = parseCleanJson(resText);
+      tcs = parsed.testCases || [];
+    }
+
+    const saved = [];
+    for (const tc of tcs) {
+      const newTc = await prisma.testCase.create({
+        data: {
+          id: 'TC-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+          customId: tc.customId || 'TC001',
+          title: tc.title,
+          type: tc.type || 'Positive',
+          preconditions: tc.preconditions || 'N/A',
+          steps: tc.steps,
+          expectedResult: tc.expectedResult,
+          priority: tc.priority || 'Medium',
+          userStoryId: storyId
+        }
+      });
+      saved.push(newTc);
+    }
+
+    res.status(201).json({ success: true, testCases: saved });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to generate targeted test cases' });
+  }
+});
+
+// POST Explore Boundaries
+app.post('/api/explore-boundaries', async (req, res) => {
+  try {
+    const { storyId } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    const story = await prisma.userStory.findUnique({
+      where: { id: storyId },
+      include: { acceptanceCriteria: true }
+    });
+
+    if (!story) {
+      return res.status(404).json({ error: 'User Story not found' });
+    }
+
+    const acText = story.acceptanceCriteria.map(ac => ac.content).join('\n');
+    let boundaryData = null;
+
+    if (!apiKey) {
+      // Mock boundary suggestions
+      boundaryData = {
+        inputs: [
+          {
+            fieldName: 'General Form Submission',
+            boundaries: ['Null/Empty state inputs', 'Long overflow values (e.g. 500+ characters)'],
+            securityPayloads: ["' OR '1'='1 -- (SQL Injection)", "<script>alert('XSS')</script>"]
+          }
+        ]
+      };
+    } else {
+      const promptText = `Analyze the following User Story and Acceptance Criteria. Extract all input fields, select boxes, dates, or numbers mentioned in the workflow. For each field, identify exact boundary limits (Equivalence Partitioning and Boundary Value Analysis) and suggest specific, custom SQL injection and Cross-Site Scripting (XSS) fuzzer payloads mapped to that field's type.
+
+User Story:
+${story.description}
+
+Acceptance Criteria:
+${acText}
+
+Output the suggestion as a JSON object containing an "inputs" array matching this exact schema:
+{
+  "inputs": [
+    {
+      "fieldName": "name of field",
+      "boundaries": ["suggested BVA length/limit boundary description", "..."],
+      "securityPayloads": ["suggested SQLi payload or XSS scripting injection payload", "..."]
+    }
+  ]
+}`;
+
+      const resText = await callAiGeneric(promptText, provider, apiKey, true);
+      boundaryData = parseCleanJson(resText);
+    }
+
+    res.json(boundaryData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to explore boundaries' });
+  }
+});
+
+// POST Generate Fuzzed Data CSV
+app.post('/api/generate-fuzzed-data', async (req, res) => {
+  try {
+    const { storyId } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    const story = await prisma.userStory.findUnique({ where: { id: storyId } });
+    if (!story) {
+      return res.status(404).json({ error: 'User Story not found' });
+    }
+
+    if (!apiKey) {
+      // Mock CSV
+      const mockCsv = `ID,FieldName,InputType,TestValue,ExpectedResult\n1,GeneralInput,Valid,ValidData,Successful validation\n2,GeneralInput,Empty,,Field required error\n3,GeneralInput,SQLi,"' OR 1=1--",Rejected payload\n4,GeneralInput,XSS,"<script>alert(1)</script>",Escaped successfully`;
+      return res.send(mockCsv);
+    }
+
+    const promptText = `Identify the input fields and validation parameters described in the User Story below.
+Generate 100 rows of custom fuzzed boundary value dataset in raw CSV format.
+The CSV must contain realistic and fuzzed values matching the fields (e.g. columns like name, email, input_type, value, expected_result).
+Include boundary edge cases, SQL injections, XSS payloads, unicode strings, date limits, and empty parameters.
+
+User Story:
+${story.description}
+
+Return ONLY the raw CSV text. Do not wrap in markdown code blocks.`;
+
+    const csvText = await callAiGeneric(promptText, provider, apiKey, false);
+    res.type('text/csv').send(csvText.replace(/^```csv\n|```$/g, '').trim());
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to generate fuzzed data' });
+  }
+});
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Backend server (SQL) running on http://localhost:${PORT}`);
