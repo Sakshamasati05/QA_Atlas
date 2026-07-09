@@ -1939,9 +1939,6 @@ _Reported via QAutopilot Execution Engine_`;
           <button className={`tab-btn ${activeTab === 'repository' ? 'active' : ''}`} onClick={() => setActiveTab('repository')}>
             Test Cases Repository ({testCases.length})
           </button>
-          <button className={`tab-btn ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>
-            📋 Master Test Strategy
-          </button>
           <button className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
             QA Analytics & Coverage
           </button>
@@ -2843,63 +2840,7 @@ _Reported via QAutopilot Execution Engine_`;
           </div>
         )}
 
-        {/* Tab: Master Test Strategy */}
-        {activeTab === 'strategy' && (
-          <div className="tab-content" style={{ overflowY: 'auto', padding: '24px' }}>
-            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ fontFamily: 'Outfit, sans-serif' }}>Master Test Strategy & Plan</h2>
-                <span className="repo-subtitle">
-                  Formal methodology and testing strategy scope for: <strong>{activeStory ? activeStory.title : 'No active user story'}</strong>
-                </span>
-              </div>
-              {activeStory && (
-                <button
-                  className="btn-primary"
-                  onClick={handleGenerateStrategy}
-                  disabled={isGeneratingStrategy}
-                  style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}
-                >
-                  {isGeneratingStrategy ? 'Drafting Strategy...' : '⚙️ Compile Test Strategy'}
-                </button>
-              )}
-            </div>
 
-            {!activeStory ? (
-              <div className="empty-state">
-                <h3>No active user story loaded</h3>
-                <p>Please load a user story from history or generator to view the strategy.</p>
-              </div>
-            ) : (
-              <div className="strategy-container-card" style={{ padding: '24px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '16px', minHeight: '400px' }}>
-                {testStrategyText ? (
-                  <div className="strategy-viewer">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>📝 Markdown Editor Mode</span>
-                      <button className="copy-bdd-btn" onClick={() => {
-                        navigator.clipboard.writeText(testStrategyText);
-                        alert('Test Strategy copied to clipboard!');
-                      }} style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                        📋 Copy Plan
-                      </button>
-                    </div>
-                    <textarea
-                      value={testStrategyText}
-                      onChange={(e) => setTestStrategyText(e.target.value)}
-                      style={{ width: '100%', minHeight: '500px', background: 'var(--bg-app)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.5' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="empty-state" style={{ border: 'none', margin: '80px auto' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                    <h3>No strategy compiled yet</h3>
-                    <p>Click "Compile Test Strategy" to analyze requirements and draft a master testing methodology.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Tab: QA Analytics & Coverage */}
         {activeTab === 'analytics' && (
