@@ -1162,7 +1162,7 @@ export default function ChatAssistant() {
     }
     try {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
-      const res = await fetch(`${BACKEND_URL}/api/generate-fuzzed-data`, {
+      const res = await fetch(`${BACKEND_URL}/generate-fuzzed-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1201,7 +1201,7 @@ export default function ChatAssistant() {
         return;
       }
 
-      const res = await fetch(`${BACKEND_URL}/api/explore-boundaries`, {
+      const res = await fetch(`${BACKEND_URL}/explore-boundaries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1225,7 +1225,7 @@ export default function ChatAssistant() {
     setIsGeneratingStrategy(true);
     try {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
-      const res = await fetch(`${BACKEND_URL}/api/generate-strategy`, {
+      const res = await fetch(`${BACKEND_URL}/generate-strategy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1249,7 +1249,7 @@ export default function ChatAssistant() {
     if (index !== 999) setGeneratingAcIndex(index);
     try {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
-      const res = await fetch(`${BACKEND_URL}/api/generate-targeted-tc`, {
+      const res = await fetch(`${BACKEND_URL}/generate-targeted-tc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1275,7 +1275,7 @@ export default function ChatAssistant() {
     setIsOptimizingSuite(true);
     try {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
-      const res = await fetch(`${BACKEND_URL}/api/optimize-suite`, {
+      const res = await fetch(`${BACKEND_URL}/optimize-suite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1305,7 +1305,7 @@ export default function ChatAssistant() {
     setIsEnhancingStory(true);
     try {
       const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
-      const res = await fetch(`${BACKEND_URL}/api/enhance-story`, {
+      const res = await fetch(`${BACKEND_URL}/enhance-story`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

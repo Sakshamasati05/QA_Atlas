@@ -3014,17 +3014,11 @@ app.post('/api/enhance-story', async (req, res) => {
     }
 
     if (!apiKey) {
-      // Mock Offline Story Enhancer
-      const mockEnhancedStory = `As a Registered User\nI want to navigate and submit the form\nSo that my validation details are recorded in the database.\n\n### Functional Rules:\n1. All fields marked required must be filled.\n2. Email must match standard RFC format.\n3. State workflow shifts on successful save.`;
-      const mockEnhancedCriteria = [
-        `[AC1] Verify form cannot be submitted when required fields are blank.`,
-        `[AC2] Verify standard validation error displays for invalid email formatting.`,
-        `[AC3] Verify success logs are saved to database matching the state transition.`
-      ];
-      return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
+      return returnMockEnhancedStory(res, userStory, acceptanceCriteria);
     }
 
-    const promptText = `You are a Lead Product Owner and Business Analyst.
+    try {
+      const promptText = `You are a Lead Product Owner and Business Analyst.
 Your task is to analyze the following draft user story and acceptance criteria, and refine/expand them into an industry-grade, highly precise, and complete Agile specification.
 
 User Story Draft:
@@ -3047,17 +3041,39 @@ Output must be ONLY a valid raw JSON object matching the schema. Do not include 
   "enhancedCriteria": ["...", "..."]
 }`;
 
-    const resText = await callAiGeneric(promptText, provider, apiKey, true);
-    const parsed = parseCleanJson(resText);
-    res.json({
-      enhancedStory: parsed.enhancedStory || userStory,
-      enhancedCriteria: parsed.enhancedCriteria || (acceptanceCriteria ? acceptanceCriteria.split('\n') : [])
-    });
+      const resText = await callAiGeneric(promptText, provider, apiKey, true);
+      let parsed;
+      try {
+        parsed = parseCleanJson(resText);
+      } catch (e) {
+        parsed = {
+          enhancedStory: resText,
+          enhancedCriteria: acceptanceCriteria ? acceptanceCriteria.split('\n') : []
+        };
+      }
+      res.json({
+        enhancedStory: parsed.enhancedStory || userStory,
+        enhancedCriteria: parsed.enhancedCriteria || (acceptanceCriteria ? acceptanceCriteria.split('\n') : [])
+      });
+    } catch (aiError) {
+      console.warn("AI enhancement failed, falling back to mock:", aiError);
+      return returnMockEnhancedStory(res, userStory, acceptanceCriteria);
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to enhance user story requirements' });
   }
 });
+
+function returnMockEnhancedStory(res, userStory, acceptanceCriteria) {
+  const mockEnhancedStory = `As a Registered User\nI want to navigate and submit the form\nSo that my validation details are recorded in the database.\n\n### Functional Rules:\n1. All fields marked required must be filled.\n2. Email must match standard RFC format.\n3. State workflow shifts on successful save.\n\n(Draft requirements fallback):\n${userStory || ''}`;
+  const mockEnhancedCriteria = [
+    `[AC1] Verify form cannot be submitted when required fields are blank.`,
+    `[AC2] Verify standard validation error displays for invalid email formatting.`,
+    `[AC3] Verify success logs are saved to database matching the state transition.`
+  ];
+  return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
+}
 
 const PORT = 5000;
 app.listen(PORT, () => {
