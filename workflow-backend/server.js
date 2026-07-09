@@ -1324,11 +1324,12 @@ ${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Databa
 5. **Concrete Test Data & Precise Verification:** Never use vague placeholders like "enter valid data". Specify precise test inputs (e.g., exact emails, specific numerical values, boundaries) and the exact expected outputs (e.g., specific error texts like "Invalid Email Address format").
 6. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
 7. **Explicit Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
-8. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):** For edge cases, specify the exact testing boundaries (e.g. minimum and maximum string lengths, negative numerical bounds, special character values) and the exact data parameters.
-9. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
-10. **Zero Filler Scenarios:** Quality and functional depth are paramount. If the story only warrants 2 high-value test cases, generate ONLY those 2. Never generate junk scenarios just to reach requested counts.
-11. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default. Do not make up fake AC numbers that do not correspond to the actual requirements.
-12. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+8. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP) Values:** For every input field, you must explicitly inject concrete fuzzed values representing both valid and invalid partitions. For example, instead of writing "Enter invalid mobile number", write "Enter '+1-555' (invalid length)" or "Enter '9999999999' (valid number)".
+9. **State Transition Testing (STT) Scenarios:** If the requirements define a workflow state machine (e.g. Draft -> Pending -> Approved), you must write specific scenarios verifying every valid status transition path, blocked invalid transition attempts (e.g. transition directly from Draft to Approved), and check that only authorized roles can trigger specific transitions.
+10. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
+11. **Zero Filler Scenarios:** Quality and functional depth are paramount. If the story only warrants 2 high-value test cases, generate ONLY those 2. Never generate junk scenarios just to reach requested counts.
+12. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default. Do not make up fake AC numbers that do not correspond to the actual requirements.
+13. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
 
 **Strict Formatting & Speed Optimization Guidelines:**
 ${formatInst}
@@ -2998,6 +2999,63 @@ Return ONLY the raw CSV text. Do not wrap in markdown code blocks.`;
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to generate fuzzed data' });
+  }
+});
+
+// POST Enhance & Refine User Story Draft
+app.post('/api/enhance-story', async (req, res) => {
+  try {
+    const { userStory, acceptanceCriteria } = req.body;
+    const provider = req.headers['x-provider'] || 'gemini';
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+
+    if (!userStory && !acceptanceCriteria) {
+      return res.status(400).json({ error: 'User story or criteria is required' });
+    }
+
+    if (!apiKey) {
+      // Mock Offline Story Enhancer
+      const mockEnhancedStory = `As a Registered User\nI want to navigate and submit the form\nSo that my validation details are recorded in the database.\n\n### Functional Rules:\n1. All fields marked required must be filled.\n2. Email must match standard RFC format.\n3. State workflow shifts on successful save.`;
+      const mockEnhancedCriteria = [
+        `[AC1] Verify form cannot be submitted when required fields are blank.`,
+        `[AC2] Verify standard validation error displays for invalid email formatting.`,
+        `[AC3] Verify success logs are saved to database matching the state transition.`
+      ];
+      return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
+    }
+
+    const promptText = `You are a Lead Product Owner and Business Analyst.
+Your task is to analyze the following draft user story and acceptance criteria, and refine/expand them into an industry-grade, highly precise, and complete Agile specification.
+
+User Story Draft:
+${userStory}
+
+Acceptance Criteria Draft:
+${acceptanceCriteria}
+
+Generate a JSON object containing:
+1. "enhancedStory": A fully structured user story with:
+   - "As a [role]"
+   - "I want to [action]"
+   - "So that [benefit]"
+   - "Detailed Description" listing functional rules, parameters, validation states, and roles.
+2. "enhancedCriteria": An array of strings, where each string represents a clear, testable, and numbered Acceptance Criterion (e.g. "[AC1] Verify password field rejects inputs shorter than 8 characters"). Ensure you extract and add standard edge boundaries, validation rules, and error conditions based on the story.
+
+Output must be ONLY a valid raw JSON object matching the schema. Do not include markdown code block ticks.
+{
+  "enhancedStory": "...",
+  "enhancedCriteria": ["...", "..."]
+}`;
+
+    const resText = await callAiGeneric(promptText, provider, apiKey, true);
+    const parsed = parseCleanJson(resText);
+    res.json({
+      enhancedStory: parsed.enhancedStory || userStory,
+      enhancedCriteria: parsed.enhancedCriteria || (acceptanceCriteria ? acceptanceCriteria.split('\n') : [])
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to enhance user story requirements' });
   }
 });
 

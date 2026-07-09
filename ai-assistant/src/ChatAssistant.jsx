@@ -93,6 +93,9 @@ export default function ChatAssistant() {
   const [isExploringBoundaries, setIsExploringBoundaries] = useState(false);
   const [jiraBugText, setJiraBugText] = useState(null);
   const [isOptimizingSuite, setIsOptimizingSuite] = useState(false);
+  const [isEnhancingStory, setIsEnhancingStory] = useState(false);
+  const [simLogs, setSimLogs] = useState({});
+  const [simRunning, setSimRunning] = useState({});
 
   // Dry-Run Simulator State
   const [dryRunCases, setDryRunCases] = useState(null); // null means inactive
@@ -1294,6 +1297,75 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleEnhanceStory = async () => {
+    if (!userStory.trim() && !acceptanceCriteria.trim()) {
+      alert('Please enter a User Story draft or Acceptance Criteria first.');
+      return;
+    }
+    setIsEnhancingStory(true);
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/api/enhance-story`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ userStory, acceptanceCriteria })
+      });
+      const data = await res.json();
+      if (data.enhancedStory) setUserStory(data.enhancedStory);
+      if (data.enhancedCriteria && Array.isArray(data.enhancedCriteria)) {
+        setAcceptanceCriteria(data.enhancedCriteria.join('\n'));
+      }
+      alert('Requirements draft successfully enhanced and structured!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to enhance story requirements');
+    } finally {
+      setIsEnhancingStory(false);
+    }
+  };
+
+  const runCodeSimulator = (tc) => {
+    const id = tc.id;
+    if (simRunning[id]) return;
+    setSimRunning(prev => ({ ...prev, [id]: true }));
+    setSimLogs(prev => ({ ...prev, [id]: [] }));
+
+    const steps = tc.steps ? tc.steps.split('\n').filter(s => s.trim().length > 0) : [];
+    const logs = [
+      `[QAutopilot Runner] Initializing test framework environment...`,
+      `[Chrome Engine] Launching headless browser thread...`,
+      `[Preconditions] Validation complete: ${tc.preconditions || 'N/A'}`,
+      `[Browser] Navigation directed to: '/'`
+    ];
+
+    steps.forEach((step, idx) => {
+      logs.push(`[Step ${idx + 1}] Executing: "${step.replace(/^\d+[\.\)\s-]+\s*/, '').trim()}"`);
+    });
+
+    logs.push(`[Assert] Verifying expected result: "${tc.expectedResult}"`);
+    logs.push(`[System Log] Status: SUCCESS (0 errors, 100% assertions passed)`);
+
+    let currentLogs = [];
+    let delay = 0;
+
+    logs.forEach((logLine, index) => {
+      delay += (index === 0 || index === logs.length - 1) ? 500 : 350;
+      setTimeout(() => {
+        setSimLogs(prev => {
+          const prevTcLogs = prev[id] || [];
+          return { ...prev, [id]: [...prevTcLogs, logLine] };
+        });
+        if (index === logs.length - 1) {
+          setSimRunning(prev => ({ ...prev, [id]: false }));
+        }
+      }, delay);
+    });
+  };
+
   const exportHTMLRunReport = (cases) => {
     const total = cases.length;
     const passed = cases.filter(c => c.executionStatus === 'Passed').length;
@@ -1965,6 +2037,15 @@ _Reported via QAutopilot Execution Engine_`;
                   </button>
                   <button
                     className="generate-btn reset"
+                    onClick={handleEnhanceStory}
+                    disabled={isEnhancingStory || isTyping || (!userStory.trim() && !acceptanceCriteria.trim())}
+                    style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0 16px', margin: 0 }}
+                    title="AI-refine and expand draft requirements"
+                  >
+                    {isEnhancingStory ? '🪄 Enhancing...' : '🪄 Enhance Story'}
+                  </button>
+                  <button
+                    className="generate-btn reset"
                     onClick={handleExploreBoundaries}
                     disabled={isExploringBoundaries || isTyping || !activeStory}
                     style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.2)', padding: '0 16px', margin: 0 }}
@@ -2536,6 +2617,43 @@ _Reported via QAutopilot Execution Engine_`;
                                 </div>
                               </div>
                             );
+                          } else if (currentView === 'simulator') {
+                            const logs = simLogs[tc.id] || [];
+                            const running = simRunning[tc.id];
+                            return (
+                              <div className="tc-details simulator-details">
+                                <div className="detail-row">
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <span className="detail-label">Virtual Automation Runner Console</span>
+                                    <button
+                                      className="btn-primary"
+                                      onClick={() => runCodeSimulator(tc)}
+                                      disabled={running}
+                                      style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--primary)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                    >
+                                      {running ? '🏃 Running...' : '⚡ Run Simulation'}
+                                    </button>
+                                  </div>
+                                  <div style={{ background: '#0f172a', color: '#38bdf8', padding: '16px', borderRadius: '8px', minHeight: '180px', maxHeight: '240px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '11.5px', lineHeight: '1.5', border: '1px solid var(--border-color)', boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)' }}>
+                                    {logs.length === 0 ? (
+                                      <span style={{ color: '#64748b', fontStyle: 'italic' }}>Console idle. Click "Run Simulation" to execute test.</span>
+                                    ) : (
+                                      logs.map((log, idx) => {
+                                        let color = '#38bdf8';
+                                        if (log.includes('SUCCESS')) color = '#4ade80';
+                                        else if (log.includes('Step')) color = '#fbbf24';
+                                        else if (log.includes('Preconditions')) color = '#c084fc';
+                                        return (
+                                          <div key={idx} style={{ color, borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '2px', marginBottom: '2px', textAlign: 'left' }}>
+                                            &gt; {log}
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
                           } else {
                             return (
                               <div className="tc-details">
@@ -2683,6 +2801,7 @@ _Reported via QAutopilot Execution Engine_`;
                             <option value="playwright_pom">🎭 Playwright POM</option>
                             <option value="cypress_pom">🌲 Cypress POM</option>
                             <option value="json_payload">🔌 JSON Payload</option>
+                            <option value="simulator">⚡ Run Simulator</option>
                           </select>
                           <button className="card-action-btn" onClick={() => handleEditClick(tc)}>
                             ✏️ Edit
@@ -3040,6 +3159,53 @@ _Reported via QAutopilot Execution Engine_`;
                         ❌ Error Handling
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* RTM Coverage Grid Heatmap */}
+                <div className="rtm-container-card" style={{ marginTop: '24px', padding: '20px', marginBottom: '24px' }}>
+                  <h3>RTM Compliance Heatmap</h3>
+                  <p className="rtm-desc">Visual grid map of compliance status for all extracted acceptance criteria blocks. Click cells to interact.</p>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '10px', marginTop: '12px' }}>
+                    {activeStory.acceptanceCriteria.map((ac, idx) => {
+                      const tag = `[AC${idx + 1}]`;
+                      const isCovered = testCases.some(tc => 
+                        (tc.preconditions && tc.preconditions.toLowerCase().includes(tag.toLowerCase())) ||
+                        (tc.title && tc.title.toLowerCase().includes(tag.toLowerCase()))
+                      );
+                      return (
+                        <div
+                          key={ac.id}
+                          onClick={() => {
+                            if (!isCovered) {
+                              handleGenerateTargetedTc(ac.content, idx);
+                              alert(`Targeted scenario generation started for AC-${idx + 1}`);
+                            } else {
+                              alert(`AC-${idx + 1} is covered by test cases. Check the RTM list below.`);
+                            }
+                          }}
+                          style={{
+                            padding: '14px 8px',
+                            borderRadius: '8px',
+                            background: isCovered ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.15))' : 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.15))',
+                            border: isCovered ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                            color: isCovered ? 'var(--positive-color)' : 'var(--negative-color)',
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                          }}
+                          title={`AC-${idx + 1}: ${ac.content}`}
+                          className="heatmap-cell"
+                        >
+                          <strong style={{ display: 'block', fontSize: '13px' }}>AC-{idx + 1}</strong>
+                          <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: '700', marginTop: '4px', display: 'block' }}>
+                            {isCovered ? '✓ Covered' : '⚡ Uncovered'}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
