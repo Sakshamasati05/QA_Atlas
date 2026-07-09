@@ -2037,24 +2037,6 @@ _Reported via QAutopilot Execution Engine_`;
                   </button>
                   <button
                     className="generate-btn reset"
-                    onClick={handleEnhanceStory}
-                    disabled={isEnhancingStory || isTyping || (!userStory.trim() && !acceptanceCriteria.trim())}
-                    style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0 16px', margin: 0 }}
-                    title="AI-refine and expand draft requirements"
-                  >
-                    {isEnhancingStory ? '🪄 Enhancing...' : '🪄 Enhance Story'}
-                  </button>
-                  <button
-                    className="generate-btn reset"
-                    onClick={handleExploreBoundaries}
-                    disabled={isExploringBoundaries || isTyping || !activeStory}
-                    style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.2)', padding: '0 16px', margin: 0 }}
-                    title="Fuzz boundaries and security scenarios"
-                  >
-                    {isExploringBoundaries ? '🛡️ Fuzzing...' : '🛡️ Fuzz boundaries'}
-                  </button>
-                  <button
-                    className="generate-btn reset"
                     onClick={handleClearWorkspace}
                     disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim() && testCases.length === 0 && !activeChatId)}
                     style={{ flex: '0 0 auto', width: 'auto', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--negative-color)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0 16px', margin: 0 }}
