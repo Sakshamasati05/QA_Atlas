@@ -3160,18 +3160,29 @@ app.post('/api/jira/upload', async (req, res) => {
 
     // Clean Host URL
     let cleanHost = host.replace(/^https?:\/\//i, '').trim().split('/')[0];
+    let cleanProjectKey = projectKey;
+    if (projectKey === 'PROJECT' || !projectKey) {
+      const projectMatch = host.match(/\/projects\/([a-zA-Z0-9_]+)/i);
+      const browseMatch = host.match(/\/browse\/([a-zA-Z0-9_]+)-/i);
+      if (projectMatch) {
+        cleanProjectKey = projectMatch[1].toUpperCase();
+      } else if (browseMatch) {
+        cleanProjectKey = browseMatch[1].toUpperCase();
+      }
+    }
+
     const authString = Buffer.from(`${email}:${token}`).toString('base64');
     const selectedSchema = schema || 'standard';
 
-    console.log(`[Jira Upload] Request for host: ${cleanHost}, projectKey: ${projectKey}, schema: ${selectedSchema}`);
+    console.log(`[Jira Upload] Request for host: ${cleanHost}, projectKey: ${cleanProjectKey}, schema: ${selectedSchema}`);
 
     if (token === 'mock' || host === 'mock' || cleanHost === 'mock') {
-      console.log(`[Jira Upload] Simulating successful mock upload for project: ${projectKey}`);
+      console.log(`[Jira Upload] Simulating successful mock upload for project: ${cleanProjectKey}`);
       const mockIssues = [
-        { id: "10001", key: `${projectKey}-101`, self: `https://${cleanHost}/rest/api/3/issue/10001` }
+        { id: "10001", key: `${cleanProjectKey}-101`, self: `https://${cleanHost}/rest/api/3/issue/10001` }
       ];
       testCases.forEach((tc, idx) => {
-        mockIssues.push({ id: String(10002 + idx), key: `${projectKey}-${102 + idx}`, self: `https://${cleanHost}/rest/api/3/issue/${10002 + idx}` });
+        mockIssues.push({ id: String(10002 + idx), key: `${cleanProjectKey}-${102 + idx}`, self: `https://${cleanHost}/rest/api/3/issue/${10002 + idx}` });
       });
       return res.json({ success: true, issues: mockIssues });
     }
@@ -3180,7 +3191,7 @@ app.post('/api/jira/upload', async (req, res) => {
       // 1. Create Test Plan
       const tpSummary = `Test Plan for Story ${parentIssueKey || 'Requirements'}`;
       const tpDesc = `Master Test Plan generated dynamically by QAutopilot for the user story validation.`;
-      const tpData = await createJiraIssue(cleanHost, authString, projectKey, 'Test Plan', tpSummary, tpDesc);
+      const tpData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test Plan', tpSummary, tpDesc);
       const testPlanKey = tpData.key;
 
       if (!testPlanKey) {
@@ -3197,7 +3208,7 @@ app.post('/api/jira/upload', async (req, res) => {
       for (const tc of testCases) {
         const tSummary = `[${tc.customId || 'TC'}] ${tc.title}`;
         const tDesc = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
-        const tData = await createJiraIssue(cleanHost, authString, projectKey, 'Test', tSummary, tDesc);
+        const tData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test', tSummary, tDesc);
         
         if (tData.key) {
           createdIssues.push({ id: tData.id, key: tData.key, self: tData.self });
@@ -3209,7 +3220,7 @@ app.post('/api/jira/upload', async (req, res) => {
       // 3. Create Test Execution and link to Test Plan
       const teSummary = `Test Execution Run for Plan ${testPlanKey}`;
       const teDesc = `Execution run containing logged results and test status mappings.`;
-      const teData = await createJiraIssue(cleanHost, authString, projectKey, 'Test Execution', teSummary, teDesc);
+      const teData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test Execution', teSummary, teDesc);
       const testExecutionKey = teData.key;
 
       if (testExecutionKey) {
@@ -3227,7 +3238,7 @@ app.post('/api/jira/upload', async (req, res) => {
       
       const fields = {
         project: {
-          key: projectKey
+          key: cleanProjectKey
         },
         summary: summary,
         issuetype: {
