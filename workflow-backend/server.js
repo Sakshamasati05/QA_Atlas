@@ -3275,7 +3275,7 @@ app.post('/api/jira/upload', async (req, res) => {
     const resData = await response.json();
 
     if (!response.ok) {
-      console.error("Jira API error details:", resData);
+      console.error("Jira API error details:", JSON.stringify(resData, null, 2));
       return res.status(response.status).json({ error: resData.errorMessages?.join(', ') || 'Atlassian Jira API request failed' });
     }
 
