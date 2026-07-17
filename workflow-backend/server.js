@@ -3077,6 +3077,7 @@ function returnMockEnhancedStory(res, userStory, acceptanceCriteria) {
 
 // HELPER: CREATE INDIVIDUAL JIRA ISSUE WITH FALLBACK
 async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName, summary, descriptionText, parentIssueKey = null) {
+  console.log(`[Jira API] Creating "${issueTypeName}" issue: "${summary}"`);
   const fields = {
     project: { key: projectKey },
     summary: summary,
@@ -3106,7 +3107,11 @@ async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName,
   });
 
   if (!response.ok) {
+    const errBody = await response.text();
+    console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, errBody);
+    
     // Fallback to 'Task' with summary prefix
+    console.log(`[Jira API] Retrying with fallback issue type: "Task"...`);
     fields.issuetype.name = parentIssueKey ? 'Sub-task' : 'Task';
     fields.summary = `[${issueTypeName}] ${summary}`;
     
@@ -3157,6 +3162,8 @@ app.post('/api/jira/upload', async (req, res) => {
     let cleanHost = host.replace(/^https?:\/\//i, '').replace(/\/$/i, '').trim();
     const authString = Buffer.from(`${email}:${token}`).toString('base64');
     const selectedSchema = schema || 'standard';
+
+    console.log(`[Jira Upload] Request for host: ${cleanHost}, projectKey: ${projectKey}, schema: ${selectedSchema}`);
 
     if (selectedSchema === 'test_management') {
       // 1. Create Test Plan
