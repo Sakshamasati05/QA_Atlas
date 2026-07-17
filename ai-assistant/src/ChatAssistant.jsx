@@ -15,6 +15,16 @@ export default function ChatAssistant() {
   const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem('qatlas_claudeKey') || '');
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('qatlas_openaiKey') || '');
   const [copilotKey, setCopilotKey] = useState(() => localStorage.getItem('qatlas_copilotKey') || '');
+  const [jiraHost, setJiraHost] = useState(() => localStorage.getItem('qatlas_jiraHost') || '');
+  const [jiraEmail, setJiraEmail] = useState(() => localStorage.getItem('qatlas_jiraEmail') || '');
+  const [jiraToken, setJiraToken] = useState(() => localStorage.getItem('qatlas_jiraToken') || '');
+  const [jiraProject, setJiraProject] = useState(() => localStorage.getItem('qatlas_jiraProject') || '');
+  const [tempJiraHost, setTempJiraHost] = useState(jiraHost);
+  const [tempJiraEmail, setTempJiraEmail] = useState(jiraEmail);
+  const [tempJiraToken, setTempJiraToken] = useState(jiraToken);
+  const [tempJiraProject, setTempJiraProject] = useState(jiraProject);
+  const [parentIssueKey, setParentIssueKey] = useState('');
+  const [isUploadingToJira, setIsUploadingToJira] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
@@ -1297,6 +1307,46 @@ export default function ChatAssistant() {
     }
   };
 
+  const handlePushToJira = async () => {
+    if (!jiraHost || !jiraEmail || !jiraToken || !jiraProject) {
+      alert('Please configure your Jira Cloud integration credentials in the Settings panel (gear icon) first!');
+      return;
+    }
+    if (testCases.length === 0) {
+      alert('No test cases generated yet to upload!');
+      return;
+    }
+    setIsUploadingToJira(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/jira/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          host: jiraHost,
+          email: jiraEmail,
+          token: jiraToken,
+          projectKey: jiraProject,
+          parentIssueKey: parentIssueKey.trim() || undefined,
+          testCases
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Successfully uploaded ${data.issues.length} test cases directly to Jira Project "${jiraProject}"!`);
+        setParentIssueKey('');
+      } else {
+        alert(`Jira upload failed: ${data.error || 'Unknown API error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to establish connection with Jira Cloud endpoint');
+    } finally {
+      setIsUploadingToJira(false);
+    }
+  };
+
   const handleEnhanceStory = async () => {
     if (!userStory.trim() && !acceptanceCriteria.trim()) {
       alert('Please enter a User Story draft or Acceptance Criteria first.');
@@ -1579,6 +1629,10 @@ _Reported via QAutopilot Execution Engine_`;
     const trimmedClaude = (tempClaudeKey || '').trim();
     const trimmedOpenai = (tempOpenaiKey || '').trim();
     const trimmedCopilot = (tempCopilotKey || '').trim();
+    const trimmedJiraHost = (tempJiraHost || '').trim();
+    const trimmedJiraEmail = (tempJiraEmail || '').trim();
+    const trimmedJiraToken = (tempJiraToken || '').trim();
+    const trimmedJiraProject = (tempJiraProject || '').trim();
 
     setUserId(tempUserId);
     setProvider(tempProvider);
@@ -1586,12 +1640,21 @@ _Reported via QAutopilot Execution Engine_`;
     setClaudeKey(trimmedClaude);
     setOpenaiKey(trimmedOpenai);
     setCopilotKey(trimmedCopilot);
+    setJiraHost(trimmedJiraHost);
+    setJiraEmail(trimmedJiraEmail);
+    setJiraToken(trimmedJiraToken);
+    setJiraProject(trimmedJiraProject);
+
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
     localStorage.setItem('qatlas_geminiKey', trimmedGemini);
     localStorage.setItem('qatlas_claudeKey', trimmedClaude);
     localStorage.setItem('qatlas_openaiKey', trimmedOpenai);
     localStorage.setItem('qatlas_copilotKey', trimmedCopilot);
+    localStorage.setItem('qatlas_jiraHost', trimmedJiraHost);
+    localStorage.setItem('qatlas_jiraEmail', trimmedJiraEmail);
+    localStorage.setItem('qatlas_jiraToken', trimmedJiraToken);
+    localStorage.setItem('qatlas_jiraProject', trimmedJiraProject);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -1907,6 +1970,10 @@ _Reported via QAutopilot Execution Engine_`;
             setTempClaudeKey(claudeKey);
             setTempOpenaiKey(openaiKey);
             setTempCopilotKey(copilotKey);
+            setTempJiraHost(jiraHost);
+            setTempJiraEmail(jiraEmail);
+            setTempJiraToken(jiraToken);
+            setTempJiraProject(jiraProject);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -3310,6 +3377,50 @@ _Reported via QAutopilot Execution Engine_`;
               </div>
             )}
 
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontFamily: 'Outfit, sans-serif' }}>🔌 Jira Cloud Integration</h4>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>Jira Cloud Host URL</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempJiraHost}
+                  onChange={(e) => setTempJiraHost(e.target.value)}
+                  placeholder="e.g. your-domain.atlassian.net"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>Jira User Email</label>
+                <input
+                  type="email"
+                  className="sidebar-input"
+                  value={tempJiraEmail}
+                  onChange={(e) => setTempJiraEmail(e.target.value)}
+                  placeholder="e.g. user@domain.com"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>Jira API Token</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempJiraToken}
+                  onChange={(e) => setTempJiraToken(e.target.value)}
+                  placeholder={jiraToken ? "••••••••••••••••" : "Paste Atlassian API Token here..."}
+                />
+              </div>
+              <div className="form-group">
+                <label>Jira Project Key</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempJiraProject}
+                  onChange={(e) => setTempJiraProject(e.target.value.toUpperCase())}
+                  placeholder="e.g. PROJ"
+                />
+              </div>
+            </div>
+
             <span className="upload-hint" style={{ marginTop: '12px', display: 'block', marginBottom: '8px' }}>
               Keys are saved locally in your browser. If a key is missing for your selected provider, QAutopilot falls back to the advanced heuristic mock generator.
             </span>
@@ -3512,13 +3623,46 @@ _Reported via QAutopilot Execution Engine_`;
                 </div>
               </div>
 
-              <div className="export-section" style={{ marginBottom: '16px' }}>
+              <div className="export-section" style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
                 <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>3. Advanced Test Data Fuzzers:</strong>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button className="btn-secondary" onClick={handleDownloadFuzzedData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(99, 102, 241, 0.05)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
                     📊 Download 100-Row CSV Dataset
                   </button>
                 </div>
+              </div>
+
+              <div className="export-section" style={{ marginTop: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Direct Jira Cloud Upload:</strong>
+                {jiraHost && jiraProject ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="sidebar-input"
+                        placeholder="Parent Issue Key (optional, e.g. PROJ-123)"
+                        value={parentIssueKey}
+                        onChange={(e) => setParentIssueKey(e.target.value)}
+                        style={{ flex: 1, height: '36px' }}
+                      />
+                      <button
+                        className="btn-primary"
+                        onClick={handlePushToJira}
+                        disabled={isUploadingToJira}
+                        style={{ height: '36px', background: 'var(--primary)', flexShrink: 0 }}
+                      >
+                        {isUploadingToJira ? '🚀 Uploading...' : '🚀 Push to Jira'}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: '11.5px', color: 'var(--text-sub)' }}>
+                      Connected to project <strong>{jiraProject}</strong> at <strong>{jiraHost}</strong>. Test cases will be uploaded as {parentIssueKey ? 'Sub-tasks linked to ' + parentIssueKey : 'Tasks'}.
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '12px', background: 'var(--bg-sidebar)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12.5px', color: 'var(--text-sub)' }}>
+                    <span>Jira Cloud Integration is not configured. Go to <strong>⚙️ Settings</strong> to set up direct Jira upload credentials.</span>
+                  </div>
+                )}
               </div>
             </div>
             

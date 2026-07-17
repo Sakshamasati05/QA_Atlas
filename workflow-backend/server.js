@@ -3075,6 +3075,115 @@ function returnMockEnhancedStory(res, userStory, acceptanceCriteria) {
   return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
 }
 
+// POST Upload test cases directly to Jira Cloud
+app.post('/api/jira/upload', async (req, res) => {
+  try {
+    const { host, email, token, projectKey, parentIssueKey, testCases } = req.body;
+
+    if (!host || !email || !token || !projectKey || !testCases || testCases.length === 0) {
+      return res.status(400).json({ error: 'Missing Jira configuration details or test cases list' });
+    }
+
+    // Clean Host URL
+    let cleanHost = host.replace(/^https?:\/\//i, '').replace(/\/$/i, '').trim();
+
+    // Map each test case to Jira issue fields
+    const issueUpdates = testCases.map(tc => {
+      const summary = `[${tc.customId || 'TC'}] ${tc.title}`;
+      const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
+      
+      const fields = {
+        project: {
+          key: projectKey
+        },
+        summary: summary,
+        issuetype: {
+          name: parentIssueKey ? 'Sub-task' : 'Task'
+        },
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: descText
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      if (parentIssueKey && fields.issuetype.name === 'Sub-task') {
+        fields.parent = {
+          key: parentIssueKey
+        };
+      }
+
+      return {
+        fields
+      };
+    });
+
+    const authString = Buffer.from(`${email}:${token}`).toString('base64');
+
+    // Call Jira REST API
+    const response = await fetch(`https://${cleanHost}/rest/api/3/issue/bulk`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ issueUpdates })
+    });
+
+    const resData = await response.json();
+
+    if (!response.ok) {
+      console.error("Jira API error details:", resData);
+      return res.status(response.status).json({ error: resData.errorMessages?.join(', ') || 'Atlassian Jira API request failed' });
+    }
+
+    // If linking standard issues to parent
+    if (parentIssueKey && resData.issues && resData.issues.length > 0) {
+      for (const createdIssue of resData.issues) {
+        // Link to parent issue using issueLink api
+        try {
+          await fetch(`https://${cleanHost}/rest/api/3/issueLink`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${authString}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              type: {
+                name: 'Relates'
+              },
+              inwardIssue: {
+                key: createdIssue.key
+              },
+              outwardIssue: {
+                key: parentIssueKey
+              }
+            })
+          });
+        } catch (linkErr) {
+          console.warn("Failed to create relates link to parent issue:", linkErr);
+        }
+      }
+    }
+
+    res.json({ success: true, issues: resData.issues || [] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to upload test cases directly to Jira Cloud' });
+  }
+});
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Backend server (SQL) running on http://localhost:${PORT}`);
