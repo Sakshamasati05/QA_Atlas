@@ -3075,6 +3075,28 @@ function returnMockEnhancedStory(res, userStory, acceptanceCriteria) {
   return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
 }
 
+// HELPER: FETCH PROJECT META FOR DYNAMIC ISSUE TYPE MAPPINGS
+async function getValidIssueTypes(cleanHost, authString, cleanProjectKey) {
+  try {
+    const res = await fetch(`https://${cleanHost}/rest/api/3/project/${cleanProjectKey}`, {
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Accept': 'application/json'
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.issueTypes || [];
+    } else {
+      const err = await res.text();
+      console.warn(`[Jira Project Meta API] Failed to fetch project issue types (Status ${res.status}):`, err);
+    }
+  } catch (err) {
+    console.warn("[Jira Project Meta API] Network error during metadata fetch:", err);
+  }
+  return [];
+}
+
 // HELPER: CREATE INDIVIDUAL JIRA ISSUE WITH FALLBACK
 async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName, summary, descriptionText, parentIssueKey = null) {
   console.log(`[Jira API] Creating "${issueTypeName}" issue: "${summary}"`);
@@ -3092,7 +3114,7 @@ async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName,
     }
   };
 
-  if (parentIssueKey && issueTypeName === 'Sub-task') {
+  if (parentIssueKey && issueTypeName.toLowerCase().includes('sub')) {
     fields.parent = { key: parentIssueKey };
   }
 
@@ -3109,21 +3131,6 @@ async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName,
   if (!response.ok) {
     const errBody = await response.text();
     console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, errBody);
-    
-    // Fallback to 'Task' with summary prefix
-    console.log(`[Jira API] Retrying with fallback issue type: "Task"...`);
-    fields.issuetype.name = parentIssueKey ? 'Sub-task' : 'Task';
-    fields.summary = `[${issueTypeName}] ${summary}`;
-    
-    response = await fetch(`https://${cleanHost}/rest/api/3/issue`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ fields })
-    });
   }
 
   return response.json();
@@ -3187,15 +3194,38 @@ app.post('/api/jira/upload', async (req, res) => {
       return res.json({ success: true, issues: mockIssues });
     }
 
+    // Fetch allowed issue types dynamically
+    const allowedTypes = await getValidIssueTypes(cleanHost, authString, cleanProjectKey);
+    console.log(`[Jira Upload] Project "${cleanProjectKey}" allowed issue types:`, allowedTypes.map(t => `${t.name} (Subtask: ${t.subtask})`));
+
+    const findBestIssueType = (targetKeywords, isSubtask = false) => {
+      if (allowedTypes.length === 0) {
+        return isSubtask ? 'Sub-task' : 'Task';
+      }
+      for (const kw of targetKeywords) {
+        const found = allowedTypes.find(it => 
+          it.name.toLowerCase().includes(kw.toLowerCase()) && 
+          it.subtask === isSubtask
+        );
+        if (found) return found.name;
+      }
+      const defaultMatch = allowedTypes.find(it => it.subtask === isSubtask);
+      return defaultMatch ? defaultMatch.name : (isSubtask ? 'Sub-task' : 'Task');
+    };
+
     if (selectedSchema === 'test_management') {
+      const testPlanType = findBestIssueType(['Test Plan', 'Plan', 'Task', 'Story']);
+      const testType = findBestIssueType(['Test', 'Task', 'Story']);
+      const testExecutionType = findBestIssueType(['Test Execution', 'Execution', 'Task', 'Story']);
+
       // 1. Create Test Plan
       const tpSummary = `Test Plan for Story ${parentIssueKey || 'Requirements'}`;
       const tpDesc = `Master Test Plan generated dynamically by QAutopilot for the user story validation.`;
-      const tpData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test Plan', tpSummary, tpDesc);
+      const tpData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testPlanType, tpSummary, tpDesc);
       const testPlanKey = tpData.key;
 
       if (!testPlanKey) {
-        return res.status(500).json({ error: 'Failed to create Test Plan issue in Jira.' });
+        return res.status(500).json({ error: `Failed to create Test Plan issue in Jira. Details: ${JSON.stringify(tpData.errors || tpData.errorMessages)}` });
       }
 
       // Link Test Plan to parent issue if key is specified
@@ -3208,11 +3238,10 @@ app.post('/api/jira/upload', async (req, res) => {
       for (const tc of testCases) {
         const tSummary = `[${tc.customId || 'TC'}] ${tc.title}`;
         const tDesc = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
-        const tData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test', tSummary, tDesc);
+        const tData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testType, tSummary, tDesc);
         
         if (tData.key) {
           createdIssues.push({ id: tData.id, key: tData.key, self: tData.self });
-          // Link Test to Test Plan
           await linkJiraIssues(cleanHost, authString, tData.key, testPlanKey, 'Relates');
         }
       }
@@ -3220,11 +3249,10 @@ app.post('/api/jira/upload', async (req, res) => {
       // 3. Create Test Execution and link to Test Plan
       const teSummary = `Test Execution Run for Plan ${testPlanKey}`;
       const teDesc = `Execution run containing logged results and test status mappings.`;
-      const teData = await createJiraIssue(cleanHost, authString, cleanProjectKey, 'Test Execution', teSummary, teDesc);
+      const teData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testExecutionType, teSummary, teDesc);
       const testExecutionKey = teData.key;
 
       if (testExecutionKey) {
-        // Link Test Execution to Test Plan
         await linkJiraIssues(cleanHost, authString, testExecutionKey, testPlanKey, 'Relates');
       }
 
@@ -3232,6 +3260,9 @@ app.post('/api/jira/upload', async (req, res) => {
     }
 
     // Standard flat issue bulk creation
+    const standardTaskType = findBestIssueType(['Task', 'Story', 'Bug', 'Epic']);
+    const standardSubtaskType = findBestIssueType(['Sub-task', 'Subtask'], true);
+
     const issueUpdates = testCases.map(tc => {
       const summary = `[${tc.customId || 'TC'}] ${tc.title}`;
       const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
@@ -3242,7 +3273,7 @@ app.post('/api/jira/upload', async (req, res) => {
         },
         summary: summary,
         issuetype: {
-          name: parentIssueKey ? 'Sub-task' : 'Task'
+          name: parentIssueKey ? standardSubtaskType : standardTaskType
         },
         description: {
           type: 'doc',
@@ -3261,7 +3292,7 @@ app.post('/api/jira/upload', async (req, res) => {
         }
       };
 
-      if (parentIssueKey && fields.issuetype.name === 'Sub-task') {
+      if (parentIssueKey && fields.issuetype.name === standardSubtaskType) {
         fields.parent = {
           key: parentIssueKey
         };
@@ -3289,6 +3320,8 @@ app.post('/api/jira/upload', async (req, res) => {
       console.error("Jira API error details:", JSON.stringify(resData, null, 2));
       return res.status(response.status).json({ error: resData.errorMessages?.join(', ') || 'Atlassian Jira API request failed' });
     }
+
+    console.log(`[Jira Upload] Standard bulk upload success. Response data:`, JSON.stringify(resData, null, 2));
 
     // If linking standard issues to parent
     if (parentIssueKey && resData.issues && resData.issues.length > 0) {
