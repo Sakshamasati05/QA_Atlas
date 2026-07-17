@@ -3075,10 +3075,79 @@ function returnMockEnhancedStory(res, userStory, acceptanceCriteria) {
   return res.json({ enhancedStory: mockEnhancedStory, enhancedCriteria: mockEnhancedCriteria });
 }
 
+// HELPER: CREATE INDIVIDUAL JIRA ISSUE WITH FALLBACK
+async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName, summary, descriptionText, parentIssueKey = null) {
+  const fields = {
+    project: { key: projectKey },
+    summary: summary,
+    issuetype: { name: issueTypeName },
+    description: {
+      type: 'doc',
+      version: 1,
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: descriptionText }]
+      }]
+    }
+  };
+
+  if (parentIssueKey && issueTypeName === 'Sub-task') {
+    fields.parent = { key: parentIssueKey };
+  }
+
+  let response = await fetch(`https://${cleanHost}/rest/api/3/issue`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${authString}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ fields })
+  });
+
+  if (!response.ok) {
+    // Fallback to 'Task' with summary prefix
+    fields.issuetype.name = parentIssueKey ? 'Sub-task' : 'Task';
+    fields.summary = `[${issueTypeName}] ${summary}`;
+    
+    response = await fetch(`https://${cleanHost}/rest/api/3/issue`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ fields })
+    });
+  }
+
+  return response.json();
+}
+
+// HELPER: LINK JIRA ISSUES
+async function linkJiraIssues(cleanHost, authString, inwardKey, outwardKey, linkTypeName = 'Relates') {
+  try {
+    await fetch(`https://${cleanHost}/rest/api/3/issueLink`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: { name: linkTypeName },
+        inwardIssue: { key: inwardKey },
+        outwardIssue: { key: outwardKey }
+      })
+    });
+  } catch (err) {
+    console.warn(`Failed to link issues ${inwardKey} -> ${outwardKey}:`, err);
+  }
+}
+
 // POST Upload test cases directly to Jira Cloud
 app.post('/api/jira/upload', async (req, res) => {
   try {
-    const { host, email, token, projectKey, parentIssueKey, testCases } = req.body;
+    const { host, email, token, projectKey, parentIssueKey, testCases, schema } = req.body;
 
     if (!host || !email || !token || !projectKey || !testCases || testCases.length === 0) {
       return res.status(400).json({ error: 'Missing Jira configuration details or test cases list' });
@@ -3086,8 +3155,54 @@ app.post('/api/jira/upload', async (req, res) => {
 
     // Clean Host URL
     let cleanHost = host.replace(/^https?:\/\//i, '').replace(/\/$/i, '').trim();
+    const authString = Buffer.from(`${email}:${token}`).toString('base64');
+    const selectedSchema = schema || 'standard';
 
-    // Map each test case to Jira issue fields
+    if (selectedSchema === 'test_management') {
+      // 1. Create Test Plan
+      const tpSummary = `Test Plan for Story ${parentIssueKey || 'Requirements'}`;
+      const tpDesc = `Master Test Plan generated dynamically by QAutopilot for the user story validation.`;
+      const tpData = await createJiraIssue(cleanHost, authString, projectKey, 'Test Plan', tpSummary, tpDesc);
+      const testPlanKey = tpData.key;
+
+      if (!testPlanKey) {
+        return res.status(500).json({ error: 'Failed to create Test Plan issue in Jira.' });
+      }
+
+      // Link Test Plan to parent issue if key is specified
+      if (parentIssueKey) {
+        await linkJiraIssues(cleanHost, authString, testPlanKey, parentIssueKey, 'Relates');
+      }
+
+      // 2. Create Test cases and link them to Test Plan
+      const createdIssues = [];
+      for (const tc of testCases) {
+        const tSummary = `[${tc.customId || 'TC'}] ${tc.title}`;
+        const tDesc = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
+        const tData = await createJiraIssue(cleanHost, authString, projectKey, 'Test', tSummary, tDesc);
+        
+        if (tData.key) {
+          createdIssues.push({ id: tData.id, key: tData.key, self: tData.self });
+          // Link Test to Test Plan
+          await linkJiraIssues(cleanHost, authString, tData.key, testPlanKey, 'Relates');
+        }
+      }
+
+      // 3. Create Test Execution and link to Test Plan
+      const teSummary = `Test Execution Run for Plan ${testPlanKey}`;
+      const teDesc = `Execution run containing logged results and test status mappings.`;
+      const teData = await createJiraIssue(cleanHost, authString, projectKey, 'Test Execution', teSummary, teDesc);
+      const testExecutionKey = teData.key;
+
+      if (testExecutionKey) {
+        // Link Test Execution to Test Plan
+        await linkJiraIssues(cleanHost, authString, testExecutionKey, testPlanKey, 'Relates');
+      }
+
+      return res.json({ success: true, issues: [ { key: testPlanKey }, ...createdIssues, ...(testExecutionKey ? [{ key: testExecutionKey }] : []) ] });
+    }
+
+    // Standard flat issue bulk creation
     const issueUpdates = testCases.map(tc => {
       const summary = `[${tc.customId || 'TC'}] ${tc.title}`;
       const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
@@ -3128,8 +3243,6 @@ app.post('/api/jira/upload', async (req, res) => {
       };
     });
 
-    const authString = Buffer.from(`${email}:${token}`).toString('base64');
-
     // Call Jira REST API
     const response = await fetch(`https://${cleanHost}/rest/api/3/issue/bulk`, {
       method: 'POST',
@@ -3151,29 +3264,7 @@ app.post('/api/jira/upload', async (req, res) => {
     // If linking standard issues to parent
     if (parentIssueKey && resData.issues && resData.issues.length > 0) {
       for (const createdIssue of resData.issues) {
-        // Link to parent issue using issueLink api
-        try {
-          await fetch(`https://${cleanHost}/rest/api/3/issueLink`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Basic ${authString}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              type: {
-                name: 'Relates'
-              },
-              inwardIssue: {
-                key: createdIssue.key
-              },
-              outwardIssue: {
-                key: parentIssueKey
-              }
-            })
-          });
-        } catch (linkErr) {
-          console.warn("Failed to create relates link to parent issue:", linkErr);
-        }
+        await linkJiraIssues(cleanHost, authString, createdIssue.key, parentIssueKey, 'Relates');
       }
     }
 

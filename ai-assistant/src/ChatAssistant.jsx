@@ -25,6 +25,7 @@ export default function ChatAssistant() {
   const [tempJiraProject, setTempJiraProject] = useState(jiraProject);
   const [parentIssueKey, setParentIssueKey] = useState('');
   const [isUploadingToJira, setIsUploadingToJira] = useState(false);
+  const [jiraSchema, setJiraSchema] = useState(() => localStorage.getItem('qatlas_jiraSchema') || 'standard');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
@@ -1329,7 +1330,8 @@ export default function ChatAssistant() {
           token: jiraToken,
           projectKey: jiraProject,
           parentIssueKey: parentIssueKey.trim() || undefined,
-          testCases
+          testCases,
+          schema: jiraSchema
         })
       });
       const data = await res.json();
@@ -3636,6 +3638,20 @@ _Reported via QAutopilot Execution Engine_`;
                 <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Direct Jira Cloud Upload:</strong>
                 {jiraHost && jiraProject ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
+                      <select
+                        className="sidebar-select"
+                        value={jiraSchema}
+                        onChange={(e) => {
+                          setJiraSchema(e.target.value);
+                          localStorage.setItem('qatlas_jiraSchema', e.target.value);
+                        }}
+                        style={{ height: '36px', fontSize: '12.5px', padding: '0 10px', background: 'var(--bg-glass)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        <option value="standard">📋 Standard Flat Issues (Tasks/Sub-tasks)</option>
+                        <option value="test_management">🧪 Test Management (Test Plan, Tests, Test Execution)</option>
+                      </select>
+                    </div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <input
                         type="text"
