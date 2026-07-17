@@ -3159,7 +3159,7 @@ app.post('/api/jira/upload', async (req, res) => {
     }
 
     // Clean Host URL
-    let cleanHost = host.replace(/^https?:\/\//i, '').replace(/\/$/i, '').trim();
+    let cleanHost = host.replace(/^https?:\/\//i, '').trim().split('/')[0];
     const authString = Buffer.from(`${email}:${token}`).toString('base64');
     const selectedSchema = schema || 'standard';
 
