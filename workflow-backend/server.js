@@ -3165,6 +3165,17 @@ app.post('/api/jira/upload', async (req, res) => {
 
     console.log(`[Jira Upload] Request for host: ${cleanHost}, projectKey: ${projectKey}, schema: ${selectedSchema}`);
 
+    if (token === 'mock' || host === 'mock' || cleanHost === 'mock') {
+      console.log(`[Jira Upload] Simulating successful mock upload for project: ${projectKey}`);
+      const mockIssues = [
+        { id: "10001", key: `${projectKey}-101`, self: `https://${cleanHost}/rest/api/3/issue/10001` }
+      ];
+      testCases.forEach((tc, idx) => {
+        mockIssues.push({ id: String(10002 + idx), key: `${projectKey}-${102 + idx}`, self: `https://${cleanHost}/rest/api/3/issue/${10002 + idx}` });
+      });
+      return res.json({ success: true, issues: mockIssues });
+    }
+
     if (selectedSchema === 'test_management') {
       // 1. Create Test Plan
       const tpSummary = `Test Plan for Story ${parentIssueKey || 'Requirements'}`;
