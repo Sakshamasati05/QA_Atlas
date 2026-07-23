@@ -3129,8 +3129,21 @@ async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName,
   });
 
   if (!response.ok) {
-    const errBody = await response.text();
-    console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, errBody);
+    let errData = {};
+    try {
+      errData = await response.json();
+      console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, JSON.stringify(errData));
+    } catch (_) {
+      try {
+        const errText = await response.text();
+        console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, errText);
+        errData = { errorMessages: [errText || 'Failed to create issue'] };
+      } catch (e2) {
+        console.warn(`[Jira API] Creation of "${issueTypeName}" failed. Could not read error response:`, e2);
+        errData = { errorMessages: ['Failed to create issue'] };
+      }
+    }
+    return errData;
   }
 
   return response.json();
