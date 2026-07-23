@@ -1378,6 +1378,15 @@ export default function ChatAssistant() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        if (tempJiraProject === 'PROJECT' || !tempJiraProject) {
+          const projectMatch = hostToTest.match(/\/projects\/([a-zA-Z0-9_]+)/i);
+          const browseMatch = hostToTest.match(/\/browse\/([a-zA-Z0-9_]+)-/i);
+          if (projectMatch) {
+            setTempJiraProject(projectMatch[1].toUpperCase());
+          } else if (browseMatch) {
+            setTempJiraProject(browseMatch[1].toUpperCase());
+          }
+        }
         setJiraConnectionStatus({ 
           success: true, 
           message: data.displayName 
