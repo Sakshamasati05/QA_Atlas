@@ -26,6 +26,8 @@ export default function ChatAssistant() {
   const [parentIssueKey, setParentIssueKey] = useState('');
   const [isUploadingToJira, setIsUploadingToJira] = useState(false);
   const [jiraSchema, setJiraSchema] = useState(() => localStorage.getItem('qatlas_jiraSchema') || 'standard');
+  const [isTestingJiraConnection, setIsTestingJiraConnection] = useState(false);
+  const [jiraConnectionStatus, setJiraConnectionStatus] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
@@ -1349,6 +1351,50 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleTestJiraConnection = async () => {
+    const hostToTest = (tempJiraHost || '').trim();
+    const emailToTest = (tempJiraEmail || '').trim();
+    const tokenToTest = (tempJiraToken || '').trim();
+
+    if (!hostToTest || !emailToTest || !tokenToTest) {
+      setJiraConnectionStatus({ success: false, message: 'Please fill Host URL, User Email, and API Token first.' });
+      return;
+    }
+
+    setIsTestingJiraConnection(true);
+    setJiraConnectionStatus(null);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/jira/test-connection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          host: hostToTest,
+          email: emailToTest,
+          token: tokenToTest
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setJiraConnectionStatus({ 
+          success: true, 
+          message: data.displayName 
+            ? `Connected successfully as ${data.displayName} (${data.emailAddress})!` 
+            : data.message || 'Connection successful!'
+        });
+      } else {
+        setJiraConnectionStatus({ success: false, message: data.error || 'Connection failed' });
+      }
+    } catch (err) {
+      console.error(err);
+      setJiraConnectionStatus({ success: false, message: 'Failed to communicate with Jira connection test endpoint' });
+    } finally {
+      setIsTestingJiraConnection(false);
+    }
+  };
+
   const handleEnhanceStory = async () => {
     if (!userStory.trim() && !acceptanceCriteria.trim()) {
       alert('Please enter a User Story draft or Acceptance Criteria first.');
@@ -1976,6 +2022,7 @@ _Reported via QAutopilot Execution Engine_`;
             setTempJiraEmail(jiraEmail);
             setTempJiraToken(jiraToken);
             setTempJiraProject(jiraProject);
+            setJiraConnectionStatus(null);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -3420,6 +3467,30 @@ _Reported via QAutopilot Execution Engine_`;
                   onChange={(e) => setTempJiraProject(e.target.value.toUpperCase())}
                   placeholder="e.g. PROJ"
                 />
+              </div>
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  onClick={handleTestJiraConnection} 
+                  disabled={isTestingJiraConnection}
+                  style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.2)', width: '100%', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px' }}
+                >
+                  {isTestingJiraConnection ? '⚡ Testing Connection...' : '🔌 Test Connection'}
+                </button>
+                {jiraConnectionStatus && (
+                  <div style={{ 
+                    padding: '8px 12px', 
+                    borderRadius: '6px', 
+                    fontSize: '12px', 
+                    lineHeight: '1.4',
+                    background: jiraConnectionStatus.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                    color: jiraConnectionStatus.success ? 'var(--positive-color)' : 'var(--negative-color)',
+                    border: `1px solid ${jiraConnectionStatus.success ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+                  }}>
+                    {jiraConnectionStatus.success ? '✅ ' : '❌ '} {jiraConnectionStatus.message}
+                  </div>
+                )}
               </div>
             </div>
 

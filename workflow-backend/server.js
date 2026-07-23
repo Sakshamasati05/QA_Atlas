@@ -3337,6 +3337,48 @@ app.post('/api/jira/upload', async (req, res) => {
   }
 });
 
+// POST Test Jira Connection credentials
+app.post('/api/jira/test-connection', async (req, res) => {
+  try {
+    const { host, email, token } = req.body;
+    if (!host || !email || !token) {
+      return res.status(400).json({ success: false, error: 'Host URL, email, and API token are all required.' });
+    }
+
+    let cleanHost = host.replace(/^https?:\/\//i, '').trim().split('/')[0];
+    if (token === 'mock' || host === 'mock' || cleanHost === 'mock') {
+      return res.json({ success: true, message: 'Mock Sandbox Connection Successful!' });
+    }
+
+    const authString = Buffer.from(`${email}:${token}`).toString('base64');
+    
+    const response = await fetch(`https://${cleanHost}/rest/api/3/myself`, {
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const userData = await response.json();
+      return res.json({ success: true, displayName: userData.displayName, emailAddress: userData.emailAddress });
+    } else {
+      let errDetail = 'Invalid credentials';
+      try {
+        const errJson = await response.json();
+        errDetail = errJson.errorMessages?.join(', ') || errDetail;
+      } catch (_) {
+        const errText = await response.text();
+        errDetail = errText || errDetail;
+      }
+      return res.status(response.status).json({ success: false, error: `Authentication failed (Status ${response.status}): ${errDetail}` });
+    }
+  } catch (error) {
+    console.error('[Jira Connection Test Error]:', error);
+    return res.status(500).json({ success: false, error: `Connection failed: ${error.message}` });
+  }
+});
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Backend server (SQL) running on http://localhost:${PORT}`);
