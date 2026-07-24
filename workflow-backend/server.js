@@ -3246,7 +3246,7 @@ app.post('/api/jira/upload', async (req, res) => {
         await linkJiraIssues(cleanHost, authString, testPlanKey, parentIssueKey, 'Relates');
       }
 
-      // 2. Create Test cases and link them to Test Plan
+      // 2. Create Test cases and link them to Test Plan, and create a Test Execution for EACH Test Case
       const createdIssues = [];
       for (const tc of testCases) {
         const tSummary = `[${tc.customId || 'TC'}] ${tc.title}`;
@@ -3255,95 +3255,58 @@ app.post('/api/jira/upload', async (req, res) => {
         
         if (tData.key) {
           createdIssues.push({ id: tData.id, key: tData.key, self: tData.self });
+          
+          // Link Test to Test Plan
           await linkJiraIssues(cleanHost, authString, tData.key, testPlanKey, 'Relates');
+
+          // Create separate Test Execution for this test
+          const teSummary = `Test Execution Run for Test ${tData.key} [${tc.customId || 'TC'}]`;
+          const teDesc = `Execution run containing logged results for: ${tSummary}`;
+          const teData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testExecutionType, teSummary, teDesc);
+          
+          if (teData.key) {
+            createdIssues.push({ id: teData.id, key: teData.key, self: teData.self });
+            // Link Test Execution to Test Plan
+            await linkJiraIssues(cleanHost, authString, teData.key, testPlanKey, 'Relates');
+            // Link Test Execution to Test Case
+            await linkJiraIssues(cleanHost, authString, teData.key, tData.key, 'Relates');
+          }
         }
       }
 
-      // 3. Create Test Execution and link to Test Plan
-      const teSummary = `Test Execution Run for Plan ${testPlanKey}`;
-      const teDesc = `Execution run containing logged results and test status mappings.`;
-      const teData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testExecutionType, teSummary, teDesc);
-      const testExecutionKey = teData.key;
-
-      if (testExecutionKey) {
-        await linkJiraIssues(cleanHost, authString, testExecutionKey, testPlanKey, 'Relates');
-      }
-
-      return res.json({ success: true, issues: [ { key: testPlanKey }, ...createdIssues, ...(testExecutionKey ? [{ key: testExecutionKey }] : []) ] });
+      return res.json({ success: true, issues: [ { key: testPlanKey }, ...createdIssues ] });
     }
 
     // Standard flat issue bulk creation
     const standardTaskType = findBestIssueType(['Task', 'Story', 'Bug', 'Epic']);
     const standardSubtaskType = findBestIssueType(['Sub-task', 'Subtask'], true);
 
-    const issueUpdates = testCases.map(tc => {
+    const createdIssues = [];
+    for (const tc of testCases) {
       const summary = `[${tc.customId || 'TC'}] ${tc.title}`;
       const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
       
-      const fields = {
-        project: {
-          key: cleanProjectKey
-        },
-        summary: summary,
-        issuetype: {
-          name: parentIssueKey ? standardSubtaskType : standardTaskType
-        },
-        description: {
-          type: 'doc',
-          version: 1,
-          content: [
-            {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  text: descText
-                }
-              ]
-            }
-          ]
+      const tData = await createJiraIssue(
+        cleanHost, 
+        authString, 
+        cleanProjectKey, 
+        parentIssueKey ? standardSubtaskType : standardTaskType, 
+        summary, 
+        descText,
+        parentIssueKey || null
+      );
+      
+      if (tData.key) {
+        createdIssues.push({ id: tData.id, key: tData.key, self: tData.self });
+        if (parentIssueKey && !standardSubtaskType.toLowerCase().includes('sub')) {
+          await linkJiraIssues(cleanHost, authString, tData.key, parentIssueKey, 'Relates');
         }
-      };
-
-      if (parentIssueKey && fields.issuetype.name === standardSubtaskType) {
-        fields.parent = {
-          key: parentIssueKey
-        };
-      }
-
-      return {
-        fields
-      };
-    });
-
-    // Call Jira REST API
-    const response = await fetch(`https://${cleanHost}/rest/api/3/issue/bulk`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ issueUpdates })
-    });
-
-    const resData = await response.json();
-
-    if (!response.ok) {
-      console.error("Jira API error details:", JSON.stringify(resData, null, 2));
-      return res.status(response.status).json({ error: resData.errorMessages?.join(', ') || 'Atlassian Jira API request failed' });
-    }
-
-    console.log(`[Jira Upload] Standard bulk upload success. Response data:`, JSON.stringify(resData, null, 2));
-
-    // If linking standard issues to parent
-    if (parentIssueKey && resData.issues && resData.issues.length > 0) {
-      for (const createdIssue of resData.issues) {
-        await linkJiraIssues(cleanHost, authString, createdIssue.key, parentIssueKey, 'Relates');
+      } else {
+        console.warn(`[Jira Upload] Failed to create standard issue for testcase: ${tc.title}`);
       }
     }
 
-    res.json({ success: true, issues: resData.issues || [] });
+    res.json({ success: true, issues: createdIssues });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to upload test cases directly to Jira Cloud' });
