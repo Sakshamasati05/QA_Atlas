@@ -1199,6 +1199,67 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleDownloadExcelData = async () => {
+    if (!activeStory) {
+      alert('Please load a user story first.');
+      return;
+    }
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const res = await fetch(`${BACKEND_URL}/generate-fuzzed-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': provider,
+          'x-api-key': activeKey
+        },
+        body: JSON.stringify({ storyId: activeStory.id })
+      });
+      const csvText = await res.text();
+      
+      const rows = csvText.split('\n');
+      let htmlTable = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+      htmlTable += '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Fuzzed Dataset</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
+      htmlTable += '<body><table border="1">';
+      rows.forEach(row => {
+        if (!row.trim()) return;
+        htmlTable += '<tr>';
+        let inQuotes = false;
+        let col = '';
+        const cols = [];
+        for (let i = 0; i < row.length; i++) {
+          const char = row[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            cols.push(col);
+            col = '';
+          } else {
+            col += char;
+          }
+        }
+        cols.push(col);
+        cols.forEach(cell => {
+          const cleanCell = cell.replace(/^"|"$/g, '').trim();
+          htmlTable += `<td>${cleanCell}</td>`;
+        });
+        htmlTable += '</tr>';
+      });
+      htmlTable += '</table></body></html>';
+
+      const element = document.createElement("a");
+      const file = new Blob([htmlTable], {type: 'application/vnd.ms-excel'});
+      element.href = URL.createObjectURL(file);
+      element.download = `QAutopilot_FuzzedData_${activeStory.id}.xls`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate fuzzed Excel data');
+    }
+  };
+
   const handleExploreBoundaries = async () => {
     if (!activeStory && !userStory.trim()) {
       alert('Please load or generate a test suite first.');
@@ -3667,7 +3728,7 @@ _Reported via QAutopilot Execution Engine_`;
       {/* Universal Exporter Modal */}
       {isExportModalOpen && (
         <div className="modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="modal-content" style={{ maxWidth: '650px', width: '90%' }}>
+          <div className="modal-content" style={{ maxWidth: '650px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h3>Universal QA Exporter</h3>
               <button className="modal-close" onClick={() => setIsExportModalOpen(false)}>✕</button>
@@ -3710,6 +3771,9 @@ _Reported via QAutopilot Execution Engine_`;
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button className="btn-secondary" onClick={handleDownloadFuzzedData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(99, 102, 241, 0.05)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
                     📊 Download 100-Row CSV Dataset
+                  </button>
+                  <button className="btn-secondary" onClick={handleDownloadExcelData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(16, 185, 129, 0.05)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                    🟢 Download Excel (.xls) Dataset
                   </button>
                 </div>
               </div>
