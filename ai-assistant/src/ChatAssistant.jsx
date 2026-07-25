@@ -3886,20 +3886,8 @@ _Reported via QAutopilot Execution Engine_`;
                 </div>
               </div>
 
-              <div className="export-section" style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
-                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>3. Advanced Test Data Fuzzers:</strong>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button className="btn-secondary" onClick={handleDownloadFuzzedData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(99, 102, 241, 0.05)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
-                    📊 Download 100-Row CSV Dataset
-                  </button>
-                  <button className="btn-secondary" onClick={handleDownloadExcelData} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(16, 185, 129, 0.05)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
-                    🟢 Download Excel (.xls) Dataset
-                  </button>
-                </div>
-              </div>
-
-              <div className="export-section" style={{ marginTop: '16px' }}>
-                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Direct Jira Cloud Upload:</strong>
+              <div className="export-section" style={{ marginTop: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>3. Direct Jira Cloud Upload:</strong>
                 {jiraHost && jiraProject ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
@@ -3944,8 +3932,8 @@ _Reported via QAutopilot Execution Engine_`;
                   </div>
                 )}
               </div>
-              <div className="export-section" style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>5. Export Test Cases Spreadsheet:</strong>
+              <div className="export-section" style={{ marginTop: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Export Test Cases Spreadsheet:</strong>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(16, 185, 129, 0.05)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
                     🟢 Download Excel (.xls)
