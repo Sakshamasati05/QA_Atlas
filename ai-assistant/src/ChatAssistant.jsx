@@ -2363,6 +2363,9 @@ _Reported via QAutopilot Execution Engine_`;
                     <button className="btn-secondary" onClick={() => setIsExportModalOpen(true)} style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
                       📤 Exporters
                     </button>
+                    <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                      🟢 Download Excel
+                    </button>
                     <button
                       className="btn-secondary"
                       onClick={handleOptimizeSuite}
