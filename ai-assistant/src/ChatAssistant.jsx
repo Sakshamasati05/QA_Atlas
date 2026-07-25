@@ -1217,40 +1217,11 @@ export default function ChatAssistant() {
       });
       const csvText = await res.text();
       
-      const rows = csvText.split('\n');
-      let htmlTable = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-      htmlTable += '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Fuzzed Dataset</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
-      htmlTable += '<body><table border="1">';
-      rows.forEach(row => {
-        if (!row.trim()) return;
-        htmlTable += '<tr>';
-        let inQuotes = false;
-        let col = '';
-        const cols = [];
-        for (let i = 0; i < row.length; i++) {
-          const char = row[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            cols.push(col);
-            col = '';
-          } else {
-            col += char;
-          }
-        }
-        cols.push(col);
-        cols.forEach(cell => {
-          const cleanCell = cell.replace(/^"|"$/g, '').trim();
-          htmlTable += `<td>${cleanCell}</td>`;
-        });
-        htmlTable += '</tr>';
-      });
-      htmlTable += '</table></body></html>';
-
+      const excelFriendlyText = `sep=,\n${csvText}`;
+      const file = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), excelFriendlyText], {type: 'text/csv;charset=utf-8'});
       const element = document.createElement("a");
-      const file = new Blob([htmlTable], {type: 'application/vnd.ms-excel'});
       element.href = URL.createObjectURL(file);
-      element.download = `QAutopilot_FuzzedData_${activeStory.id}.xls`;
+      element.download = `QAutopilot_FuzzedData_${activeStory.id}.csv`;
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
@@ -1266,30 +1237,32 @@ export default function ChatAssistant() {
       return;
     }
     
-    let htmlTable = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    htmlTable += '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Test Cases</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
-    htmlTable += '<body><table border="1">';
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '';
+      const stringVal = String(val);
+      if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+        return `"${stringVal.replace(/"/g, '""')}"`;
+      }
+      return stringVal;
+    };
     
-    htmlTable += '<tr><th>ID</th><th>Title</th><th>Type</th><th>Priority</th><th>Preconditions</th><th>Steps</th><th>Expected Result</th></tr>';
+    let csvContent = 'sep=,\n';
+    csvContent += 'ID,Title,Type,Priority,Preconditions,Steps,Expected Result\n';
     
     testCases.forEach(tc => {
-      htmlTable += '<tr>';
-      htmlTable += `<td>${tc.customId || 'TC'}</td>`;
-      htmlTable += `<td>${tc.title || ''}</td>`;
-      htmlTable += `<td>${tc.type || ''}</td>`;
-      htmlTable += `<td>${tc.priority || ''}</td>`;
-      htmlTable += `<td>${tc.preconditions || ''}</td>`;
-      htmlTable += `<td>${tc.steps || ''}</td>`;
-      htmlTable += `<td>${tc.expectedResult || ''}</td>`;
-      htmlTable += '</tr>';
+      csvContent += `${escapeCsv(tc.customId || 'TC')},`;
+      csvContent += `${escapeCsv(tc.title)},`;
+      csvContent += `${escapeCsv(tc.type)},`;
+      csvContent += `${escapeCsv(tc.priority)},`;
+      csvContent += `${escapeCsv(tc.preconditions)},`;
+      csvContent += `${escapeCsv(tc.steps)},`;
+      csvContent += `${escapeCsv(tc.expectedResult)}\n`;
     });
     
-    htmlTable += '</table></body></html>';
-
+    const file = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], {type: 'text/csv;charset=utf-8'});
     const element = document.createElement("a");
-    const file = new Blob([htmlTable], {type: 'application/vnd.ms-excel'});
     element.href = URL.createObjectURL(file);
-    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.xls`;
+    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.csv`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
