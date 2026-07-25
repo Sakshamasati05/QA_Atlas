@@ -1260,6 +1260,76 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleDownloadTestCasesExcel = () => {
+    if (testCases.length === 0) {
+      alert('No test cases generated yet to export!');
+      return;
+    }
+    
+    let htmlTable = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+    htmlTable += '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Test Cases</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
+    htmlTable += '<body><table border="1">';
+    
+    htmlTable += '<tr><th>ID</th><th>Title</th><th>Type</th><th>Priority</th><th>Preconditions</th><th>Steps</th><th>Expected Result</th></tr>';
+    
+    testCases.forEach(tc => {
+      htmlTable += '<tr>';
+      htmlTable += `<td>${tc.customId || 'TC'}</td>`;
+      htmlTable += `<td>${tc.title || ''}</td>`;
+      htmlTable += `<td>${tc.type || ''}</td>`;
+      htmlTable += `<td>${tc.priority || ''}</td>`;
+      htmlTable += `<td>${tc.preconditions || ''}</td>`;
+      htmlTable += `<td>${tc.steps || ''}</td>`;
+      htmlTable += `<td>${tc.expectedResult || ''}</td>`;
+      htmlTable += '</tr>';
+    });
+    
+    htmlTable += '</table></body></html>';
+
+    const element = document.createElement("a");
+    const file = new Blob([htmlTable], {type: 'application/vnd.ms-excel'});
+    element.href = URL.createObjectURL(file);
+    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.xls`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const handleDownloadTestCasesCsv = () => {
+    if (testCases.length === 0) {
+      alert('No test cases generated yet to export!');
+      return;
+    }
+    
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '';
+      const stringVal = String(val);
+      if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+        return `"${stringVal.replace(/"/g, '""')}"`;
+      }
+      return stringVal;
+    };
+    
+    let csvContent = 'ID,Title,Type,Priority,Preconditions,Steps,Expected Result\n';
+    testCases.forEach(tc => {
+      csvContent += `${escapeCsv(tc.customId || 'TC')},`;
+      csvContent += `${escapeCsv(tc.title)},`;
+      csvContent += `${escapeCsv(tc.type)},`;
+      csvContent += `${escapeCsv(tc.priority)},`;
+      csvContent += `${escapeCsv(tc.preconditions)},`;
+      csvContent += `${escapeCsv(tc.steps)},`;
+      csvContent += `${escapeCsv(tc.expectedResult)}\n`;
+    });
+    
+    const csvBlob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8' });
+    const element = document.createElement("a");
+    element.href = URL.createObjectURL(csvBlob);
+    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.csv`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
   const handleExploreBoundaries = async () => {
     if (!activeStory && !userStory.trim()) {
       alert('Please load or generate a test suite first.');
@@ -3823,6 +3893,17 @@ _Reported via QAutopilot Execution Engine_`;
                     <span>Jira Cloud Integration is not configured. Go to <strong>⚙️ Settings</strong> to set up direct Jira upload credentials.</span>
                   </div>
                 )}
+              </div>
+              <div className="export-section" style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>5. Export Test Cases Spreadsheet:</strong>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(16, 185, 129, 0.05)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                    🟢 Download Excel (.xls)
+                  </button>
+                  <button className="btn-secondary" onClick={handleDownloadTestCasesCsv} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(99, 102, 241, 0.05)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
+                    📊 Download CSV
+                  </button>
+                </div>
               </div>
             </div>
             
