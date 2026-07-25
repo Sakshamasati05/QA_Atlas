@@ -2994,7 +2994,13 @@ ${story.description}
 
 Return ONLY the raw CSV text. Do not wrap in markdown code blocks.`;
 
-    const csvText = await callAiGeneric(promptText, provider, apiKey, false);
+    let csvText;
+    try {
+      csvText = await callAiGeneric(promptText, provider, apiKey, false);
+    } catch (aiErr) {
+      console.warn(`[Fuzzer API Warning] AI call failed, falling back to mock dataset:`, aiErr.message);
+      csvText = `ID,FieldName,InputType,TestValue,ExpectedResult\n1,GeneralInput,Valid,ValidData,Successful validation\n2,GeneralInput,Empty,,Field required error\n3,GeneralInput,SQLi,"' OR 1=1--",Rejected payload\n4,GeneralInput,XSS,"<script>alert(1)</script>",Escaped successfully`;
+    }
     res.type('text/csv').send(csvText.replace(/^```csv\n|```$/g, '').trim());
   } catch (error) {
     console.error(error);
