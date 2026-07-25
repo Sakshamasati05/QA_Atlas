@@ -1217,11 +1217,61 @@ export default function ChatAssistant() {
       });
       const csvText = await res.text();
       
-      const excelFriendlyText = `sep=,\n${csvText}`;
-      const file = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), excelFriendlyText], {type: 'text/csv;charset=utf-8'});
+      const cleanXml = (val) => {
+        if (val === null || val === undefined) return '';
+        return String(val)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+      };
+
+      const rows = csvText.split('\n');
+      
+      let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+      xml += '<?mso-application progid="Excel.Sheet"?>\n';
+      xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+      xml += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
+      xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
+      xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
+      xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
+      xml += ' <Worksheet ss:Name="Fuzzed Dataset">\n';
+      xml += '  <Table>\n';
+
+      rows.forEach(row => {
+        if (!row.trim()) return;
+        xml += '   <Row>\n';
+        let inQuotes = false;
+        let col = '';
+        const cols = [];
+        for (let i = 0; i < row.length; i++) {
+          const char = row[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            cols.push(col);
+            col = '';
+          } else {
+            col += char;
+          }
+        }
+        cols.push(col);
+        cols.forEach(cell => {
+          const cleanCell = cell.replace(/^"|"$/g, '').trim();
+          xml += `    <Cell><Data ss:Type="String">${cleanXml(cleanCell)}</Data></Cell>\n`;
+        });
+        xml += '   </Row>\n';
+      });
+
+      xml += '  </Table>\n';
+      xml += ' </Worksheet>\n';
+      xml += '</Workbook>\n';
+
       const element = document.createElement("a");
+      const file = new Blob([xml], {type: 'application/vnd.ms-excel'});
       element.href = URL.createObjectURL(file);
-      element.download = `QAutopilot_FuzzedData_${activeStory.id}.csv`;
+      element.download = `QAutopilot_FuzzedData_${activeStory.id}.xls`;
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
@@ -1237,32 +1287,56 @@ export default function ChatAssistant() {
       return;
     }
     
-    const escapeCsv = (val) => {
+    const cleanXml = (val) => {
       if (val === null || val === undefined) return '';
-      const stringVal = String(val);
-      if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
-        return `"${stringVal.replace(/"/g, '""')}"`;
-      }
-      return stringVal;
+      return String(val)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
     };
     
-    let csvContent = 'sep=,\n';
-    csvContent += 'ID,Title,Type,Priority,Preconditions,Steps,Expected Result\n';
+    let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+    xml += '<?mso-application progid="Excel.Sheet"?>\n';
+    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xml += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
+    xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
+    xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
+    xml += ' <Worksheet ss:Name="Test Cases">\n';
+    xml += '  <Table>\n';
+    
+    xml += '   <Row>\n';
+    xml += '    <Cell><Data ss:Type="String">ID</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Title</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Type</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Priority</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Preconditions</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Steps</Data></Cell>\n';
+    xml += '    <Cell><Data ss:Type="String">Expected Result</Data></Cell>\n';
+    xml += '   </Row>\n';
     
     testCases.forEach(tc => {
-      csvContent += `${escapeCsv(tc.customId || 'TC')},`;
-      csvContent += `${escapeCsv(tc.title)},`;
-      csvContent += `${escapeCsv(tc.type)},`;
-      csvContent += `${escapeCsv(tc.priority)},`;
-      csvContent += `${escapeCsv(tc.preconditions)},`;
-      csvContent += `${escapeCsv(tc.steps)},`;
-      csvContent += `${escapeCsv(tc.expectedResult)}\n`;
+      xml += '   <Row>\n';
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.customId || 'TC')}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.title)}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.type)}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.priority)}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.preconditions)}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.steps)}</Data></Cell>\n`;
+      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.expectedResult)}</Data></Cell>\n`;
+      xml += '   </Row>\n';
     });
     
-    const file = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], {type: 'text/csv;charset=utf-8'});
+    xml += '  </Table>\n';
+    xml += ' </Worksheet>\n';
+    xml += '</Workbook>\n';
+
     const element = document.createElement("a");
+    const file = new Blob([xml], {type: 'application/vnd.ms-excel'});
     element.href = URL.createObjectURL(file);
-    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.csv`;
+    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.xls`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
