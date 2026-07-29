@@ -1304,10 +1304,144 @@ export default function ChatAssistant() {
     xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
     xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
     xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
+    
+    xml += ' <Styles>\n';
+    xml += '  <Style ss:ID="Default" ss:Name="Normal">\n';
+    xml += '   <Alignment ss:Vertical="Top" ss:WrapText="1"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#334155"/>\n';
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="TitleStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="14" ss:Bold="1" ss:Color="#1e293b"/>\n';
+    xml += '  </Style>\n';
+
+    xml += '  <Style ss:ID="MetaLabelStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="9" ss:Bold="1" ss:Color="#64748b"/>\n';
+    xml += '   <Interior ss:Color="#f1f5f9" ss:Pattern="Solid"/>\n';
+    xml += '  </Style>\n';
+
+    xml += '  <Style ss:ID="MetaValueStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#334155"/>\n';
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="HeaderStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
+    xml += '   <Borders>\n';
+    xml += '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#312e81"/>\n';
+    xml += '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338ca"/>\n';
+    xml += '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338ca"/>\n';
+    xml += '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338ca"/>\n';
+    xml += '   </Borders>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="11" ss:Bold="1" ss:Color="#ffffff"/>\n';
+    xml += '   <Interior ss:Color="#4f46e5" ss:Pattern="Solid"/>\n';
+    xml += '  </Style>\n';
+    
+    const borderXml = '   <Borders>\n' +
+                      '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>\n' +
+                      '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>\n' +
+                      '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>\n' +
+                      '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>\n' +
+                      '   </Borders>\n';
+                      
+    xml += '  <Style ss:ID="NormalCell">\n';
+    xml += '   <Alignment ss:Vertical="Top" ss:WrapText="1"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#334155"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="ZebraCell">\n';
+    xml += '   <Alignment ss:Vertical="Top" ss:WrapText="1"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#334155"/>\n';
+    xml += '   <Interior ss:Color="#f8fafc" ss:Pattern="Solid"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="CenterCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#334155"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="CenterZebraCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#334155"/>\n';
+    xml += '   <Interior ss:Color="#f8fafc" ss:Pattern="Solid"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="HighPriorityCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#b91c1c" ss:Bold="1"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="HighPriorityZebraCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#b91c1c" ss:Bold="1"/>\n';
+    xml += '   <Interior ss:Color="#f8fafc" ss:Pattern="Solid"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="MedPriorityCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#b45309" ss:Bold="1"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="MedPriorityZebraCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#b45309" ss:Bold="1"/>\n';
+    xml += '   <Interior ss:Color="#f8fafc" ss:Pattern="Solid"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="LowPriorityCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#15803d" ss:Bold="1"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += '  <Style ss:ID="LowPriorityZebraCell">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Top"/>\n';
+    xml += '   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#15803d" ss:Bold="1"/>\n';
+    xml += '   <Interior ss:Color="#f8fafc" ss:Pattern="Solid"/>\n';
+    xml += borderXml;
+    xml += '  </Style>\n';
+    
+    xml += ' </Styles>\n';
+    
     xml += ' <Worksheet ss:Name="Test Cases">\n';
     xml += '  <Table>\n';
     
-    xml += '   <Row>\n';
+    xml += '   <Column ss:Width="70"/>\n';   // ID
+    xml += '   <Column ss:Width="200"/>\n';  // Title
+    xml += '   <Column ss:Width="100"/>\n';  // Type
+    xml += '   <Column ss:Width="80"/>\n';   // Priority
+    xml += '   <Column ss:Width="200"/>\n';  // Preconditions
+    xml += '   <Column ss:Width="300"/>\n';  // Steps
+    xml += '   <Column ss:Width="300"/>\n';  // Expected Result
+    
+    xml += '   <Row ss:Height="30">\n';
+    xml += '    <Cell ss:MergeAcross="6" ss:StyleID="TitleStyle"><Data ss:Type="String">QAutopilot QA Test Suite Report</Data></Cell>\n';
+    xml += '   </Row>\n';
+    
+    const dateStr = new Date().toLocaleDateString();
+    xml += '   <Row ss:Height="20">\n';
+    xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">User Story:</Data></Cell>\n';
+    xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String">${cleanXml(activeStory?.title || 'Custom Test Suite')}</Data></Cell>\n`;
+    xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">Export Date:</Data></Cell>\n';
+    xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String">${dateStr}</Data></Cell>\n`;
+    xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">Total Cases:</Data></Cell>\n';
+    xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="Number">${testCases.length}</Data></Cell>\n`;
+    xml += '    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String"></Data></Cell>\n';
+    xml += '   </Row>\n';
+    
+    xml += '   <Row ss:Height="12"></Row>\n';
+    
+    xml += '   <Row ss:Height="26" ss:StyleID="HeaderStyle">\n';
     xml += '    <Cell><Data ss:Type="String">ID</Data></Cell>\n';
     xml += '    <Cell><Data ss:Type="String">Title</Data></Cell>\n';
     xml += '    <Cell><Data ss:Type="String">Type</Data></Cell>\n';
@@ -1317,19 +1451,52 @@ export default function ChatAssistant() {
     xml += '    <Cell><Data ss:Type="String">Expected Result</Data></Cell>\n';
     xml += '   </Row>\n';
     
-    testCases.forEach(tc => {
+    testCases.forEach((tc, idx) => {
+      const isZebra = idx % 2 === 1;
+      const normalStyle = isZebra ? 'ss:StyleID="ZebraCell"' : 'ss:StyleID="NormalCell"';
+      const centerStyle = isZebra ? 'ss:StyleID="CenterZebraCell"' : 'ss:StyleID="CenterCell"';
+      
+      const priorityText = (tc.priority || '').trim().toLowerCase();
+      let priorityStyle = centerStyle;
+      if (priorityText.includes('high') || priorityText.includes('critical')) {
+        priorityStyle = isZebra ? 'ss:StyleID="HighPriorityZebraCell"' : 'ss:StyleID="HighPriorityCell"';
+      } else if (priorityText.includes('medium') || priorityText.includes('med')) {
+        priorityStyle = isZebra ? 'ss:StyleID="MedPriorityZebraCell"' : 'ss:StyleID="MedPriorityCell"';
+      } else if (priorityText.includes('low')) {
+        priorityStyle = isZebra ? 'ss:StyleID="LowPriorityZebraCell"' : 'ss:StyleID="LowPriorityCell"';
+      }
+      
       xml += '   <Row>\n';
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.customId || 'TC')}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.title)}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.type)}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.priority)}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.preconditions)}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.steps)}</Data></Cell>\n`;
-      xml += `    <Cell><Data ss:Type="String">${cleanXml(tc.expectedResult)}</Data></Cell>\n`;
+      xml += `    <Cell ${centerStyle}><Data ss:Type="String">${cleanXml(tc.customId || 'TC')}</Data></Cell>\n`;
+      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.title)}</Data></Cell>\n`;
+      xml += `    <Cell ${centerStyle}><Data ss:Type="String">${cleanXml(tc.type)}</Data></Cell>\n`;
+      xml += `    <Cell ${priorityStyle}><Data ss:Type="String">${cleanXml(tc.priority)}</Data></Cell>\n`;
+      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.preconditions)}</Data></Cell>\n`;
+      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.steps)}</Data></Cell>\n`;
+      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.expectedResult)}</Data></Cell>\n`;
       xml += '   </Row>\n';
     });
     
     xml += '  </Table>\n';
+    
+    xml += '  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">\n';
+    xml += '   <Selected/>\n';
+    xml += '   <FreezePanes/>\n';
+    xml += '   <FrozenNoSplit/>\n';
+    xml += '   <SplitHorizontal>4</SplitHorizontal>\n';
+    xml += '   <TopRowBottomPane>4</TopRowBottomPane>\n';
+    xml += '   <ActivePane>2</ActivePane>\n';
+    xml += '   <Panes>\n';
+    xml += '    <Pane>\n';
+    xml += '     <Number>3</Number>\n';
+    xml += '    </Pane>\n';
+    xml += '    <Pane>\n';
+    xml += '     <Number>2</Number>\n';
+    xml += '     <ActiveRow>0</ActiveRow>\n';
+    xml += '    </Pane>\n';
+    xml += '   </Panes>\n';
+    xml += '  </WorksheetOptions>\n';
+    
     xml += ' </Worksheet>\n';
     xml += '</Workbook>\n';
 
