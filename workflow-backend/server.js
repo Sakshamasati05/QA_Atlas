@@ -234,129 +234,119 @@ function parseCleanJson(rawText) {
 
 // --- HELPER: MOCK TEST CASES GENERATOR (FALLBACK) ---
 function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default', docContext = '') {
-  const rawLines = [];
-  if (acceptanceCriteria) rawLines.push(...acceptanceCriteria.split('\n'));
-  if (userStory) rawLines.push(...userStory.slice(0, 10000).split('\n'));
-  if (docContext) rawLines.push(...docContext.slice(0, 10000).split('\n'));
+  const fullText = `${userStory || ''}\n${acceptanceCriteria || ''}\n${docContext || ''}`.toLowerCase();
+  const dynamicRules = [];
+  
+  if (fullText.includes('login') || fullText.includes('sign in') || fullText.includes('auth') || fullText.includes('credential')) {
+    dynamicRules.push(
+      { title: 'Verify login with valid registered email and correct password', type: 'Positive', steps: '1. Navigate to the Login Page.\n2. Input registered email in the Email field.\n3. Input correct password in the Password field.\n4. Click the "Login" button.', result: 'User is successfully authenticated and redirected to the main dashboard page.' },
+      { title: 'Verify login error with incorrect password', type: 'Negative', steps: '1. Navigate to the Login Page.\n2. Input registered email in the Email field.\n3. Input an invalid password in the Password field.\n4. Click "Login".', result: 'Validation alert displays: "Incorrect email or password. Please try again."' },
+      { title: 'Verify login validations with empty username and password fields', type: 'Negative', steps: '1. Navigate to the Login Page.\n2. Leave both Email and Password fields empty.\n3. Click the "Login" button.', result: 'Validation error tooltips highlight both fields indicating they are required.' },
+      { title: 'Verify account lock limit after 5 consecutive failed login attempts', type: 'Edge', steps: '1. Navigate to the Login Page.\n2. Input valid email but incorrect password consecutive times.\n3. Attempt the 5th login try.', result: 'Account is locked for security. Message displays: "Your account has been locked for 15 minutes due to too many failed attempts."' }
+    );
+  }
+  
+  if (fullText.includes('signup') || fullText.includes('register') || fullText.includes('create account') || fullText.includes('sign up')) {
+    dynamicRules.push(
+      { title: 'Verify successful user registration with all required details', type: 'Positive', steps: '1. Navigate to the Sign Up Page.\n2. Complete Full Name, Email, Password, and Confirm Password fields with valid details.\n3. Agree to the Terms & Conditions checkmark.\n4. Click "Register".', result: 'Account is successfully created and verification email is triggered.' },
+      { title: 'Verify email format validation during user signup', type: 'Negative', steps: '1. Navigate to register screen.\n2. Input a name.\n3. Input an invalid email format like "test@domain" (missing dot suffix).\n4. Click register.', result: 'Validation error displays: "Please enter a valid email address."' },
+      { title: 'Verify password complexity constraints validation', type: 'Edge', steps: '1. Complete signup fields.\n2. Input password containing only lowercase characters (e.g. "secret").\n3. Trigger signup.', result: 'Validation warning displays: "Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character."' }
+    );
+  }
+  
+  if (fullText.includes('payment') || fullText.includes('checkout') || fullText.includes('transaction') || fullText.includes('buy') || fullText.includes('stripe') || fullText.includes('order')) {
+    dynamicRules.push(
+      { title: 'Verify successful order checkout with valid payment method', type: 'Positive', steps: '1. Add item to cart and proceed to Checkout page.\n2. Fill shipping details.\n3. Input valid card credentials (number, expiry, CVV).\n4. Click "Place Order".', result: 'Payment transaction completes successfully. Order confirmation screen displays order number.' },
+      { title: 'Verify transaction rejection with expired credit card', type: 'Negative', steps: '1. Proceed to Checkout payment step.\n2. Input expired card expiry date (e.g. 12/22).\n3. Click "Place Order".', result: 'Transaction fails. Checkout displays: "Card has expired. Please use a different card."' },
+      { title: 'Verify order payment boundary values with zero or negative total amount', type: 'Edge', steps: '1. Attempt to trigger checkout API with a total cart value of 0.00.\n2. Trigger payment.', result: 'Checkout operation is blocked. Error displays: "Cart value must be greater than zero to proceed."' }
+    );
+  }
 
-  // Clean lines to extract potential requirements / acceptance criteria rules
-  const rules = rawLines
-    .map(line => line.trim())
-    .map(line => line.replace(/^[-*+\d\.\)\s]+/, '')) // remove list bullet prefixes
-    .map(line => line.replace(/^\[AC\d+\]\s*/i, '')) // remove existing AC tags
-    .filter(line => line.length > 12)
-    .filter(line => {
-      const lower = line.toLowerCase();
-      return !lower.startsWith('as a') && !lower.startsWith('i want to') && !lower.startsWith('so that') && 
-             !lower.includes('user story') && !lower.includes('acceptance criteria') && 
-             !lower.includes('generate mock') && !lower.includes('test cases');
-    });
+  if (fullText.includes('search') || fullText.includes('filter') || fullText.includes('find') || fullText.includes('query')) {
+    dynamicRules.push(
+      { title: 'Verify search results filter matches keyword input query', type: 'Positive', steps: '1. Go to search index.\n2. Type specific existing keyword (e.g. "Laptop").\n3. Click search button.', result: 'All matching catalog items containing the word "Laptop" are loaded and displayed.' },
+      { title: 'Verify search results layout when no matching records exist', type: 'Negative', steps: '1. Go to search bar.\n2. Enter random non-matching characters (e.g. "xyz987abc").\n3. Click search.', result: 'Zero results found page displays with message: "No items matching your search query were found."' }
+    );
+  }
 
-  // Unique rules
-  const uniqueRules = [...new Set(rules)];
+  if (fullText.includes('upload') || fullText.includes('file') || fullText.includes('attachment') || fullText.includes('import')) {
+    dynamicRules.push(
+      { title: 'Verify successful file upload under allowed file type limits', type: 'Positive', steps: '1. Navigate to the upload area.\n2. Select a valid file (e.g. "document.pdf", size 2MB).\n3. Click upload.', result: 'File is successfully processed, uploaded, and shows in list of attachments.' },
+      { title: 'Verify upload rejection of forbidden file extensions', type: 'Negative', steps: '1. Go to upload area.\n2. Select an executable script file (e.g. "payload.exe").\n3. Click upload.', result: 'Upload blocked. Error message displays: "File extension not allowed. Please upload PDF, PNG or DOCX documents only."' },
+      { title: 'Verify file size limits validations at boundary threshold', type: 'Edge', steps: '1. Select a file larger than max size limit (e.g. 25MB file when limit is 10MB).\n2. Click upload.', result: 'Upload is blocked. System shows warning: "File size exceeds the maximum limit of 10MB."' }
+    );
+  }
 
-  // If no rules could be parsed, provide logical fallbacks based on input context
-  if (uniqueRules.length === 0) {
-    const topic = (userStory || '').substring(0, 40).trim() || 'Requested Feature';
-    uniqueRules.push(
-      `user can successfully execute core operations of ${topic}`,
-      `form fields reject invalid inputs or blank submissions for ${topic}`,
-      `system preserves data integrity and authorization constraints during operations`
+  if (dynamicRules.length === 0) {
+    const topic = (userStory || '').substring(0, 40).trim() || 'Specified Feature';
+    dynamicRules.push(
+      { title: `Verify standard successful operation of ${topic}`, type: 'Positive', steps: `1. Open dashboard module.\n2. Access inputs for ${topic}.\n3. Complete required parameters with valid data.\n4. Click submit.`, result: 'Operation completes successfully and dashboard transitions state.' },
+      { title: `Verify validation errors for required input fields on ${topic}`, type: 'Negative', steps: `1. Open module.\n2. Leave all required input fields blank.\n3. Click submit.`, result: 'Form validation halts submission and highlights required fields.' },
+      { title: `Verify data persistence safety under high boundary volumes for ${topic}`, type: 'Edge', steps: `1. Access form options.\n2. Populate data with maximum boundary length values.\n3. Click save.`, result: 'Inputs are safely stored without buffer truncation.' }
     );
   }
 
   const testCases = [];
-
-  // Helper to construct a test case structure
-  const makeTestCase = (title, type, preconditions, steps, expectedResult, priority) => {
-    return {
-      title,
-      type,
-      preconditions,
-      steps,
-      expectedResult,
-      priority
-    };
-  };
-
-  // 1. Generate Positive Cases
+  
+  const positives = dynamicRules.filter(r => r.type === 'Positive');
   for (let i = 0; i < positiveCount; i++) {
-    const rule = uniqueRules[i % uniqueRules.length];
-    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
-    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
-    
-    testCases.push(makeTestCase(
-      `Verify successful execution: ${ruleCap}`,
-      "Positive",
-      `${acTag} User is authorized and system is initialized in default state.`,
-      `1. Navigate to the target module or form section.\n2. Input valid operational parameters matching "${rule}".\n3. Trigger the submission or activation control.\n4. Verify success confirmation message.`,
-      `The operation succeeds. The system processes the request immediately and displays positive confirmation status.`,
-      i === 0 ? "High" : "Medium"
-    ));
+    const r = positives[i % positives.length] || dynamicRules[i % dynamicRules.length];
+    testCases.push({
+      title: r.title,
+      type: 'Positive',
+      preconditions: `[AC${(i % 3) + 1}] System is initialized and user is authorized.`,
+      steps: r.steps,
+      expectedResult: r.result,
+      priority: i === 0 ? 'High' : 'Medium'
+    });
   }
 
-  // 2. Generate Negative Cases
+  const negatives = dynamicRules.filter(r => r.type === 'Negative');
   for (let i = 0; i < negativeCount; i++) {
-    const rule = uniqueRules[i % uniqueRules.length];
-    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
-    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
-
-    testCases.push(makeTestCase(
-      `Verify error prevention: ${ruleCap} with invalid/blank parameters`,
-      "Negative",
-      `${acTag} User is authorized and system form is open.`,
-      `1. Focus on the required inputs or controls for "${rule}".\n2. Clear required values or enter invalid format values.\n3. Attempt to save or submit the action.\n4. Observe validation highlights and error messages.`,
-      `Submission is rejected. System displays inline validation errors, highlights affected fields in red, and prevents invalid transaction processing.`,
-      "High"
-    ));
+    const r = negatives[i % negatives.length] || dynamicRules[i % dynamicRules.length];
+    testCases.push({
+      title: r.title,
+      type: 'Negative',
+      preconditions: `[AC${(i % 3) + 1}] System is online and form inputs are initialized.`,
+      steps: r.steps,
+      expectedResult: r.result,
+      priority: 'Medium'
+    });
   }
 
-  // 3. Generate Edge Cases
+  const edges = dynamicRules.filter(r => r.type === 'Edge');
   for (let i = 0; i < edgeCount; i++) {
-    const rule = uniqueRules[i % uniqueRules.length];
-    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
-    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
-
-    testCases.push(makeTestCase(
-      `Verify edge boundary limits for: ${ruleCap}`,
-      "Edge",
-      `${acTag} Input fields for "${rule}" are active and ready.`,
-      `1. Input extreme values (e.g. maximum length limits, special characters, boundary numeric values).\n2. Submit the form.\n3. Verify database storage representation and UI output.`,
-      `The system handles the boundary parameters safely without crashes, SQL errors, or text truncation.`,
-      "Medium"
-    ));
+    const r = edges[i % edges.length] || dynamicRules[i % dynamicRules.length];
+    testCases.push({
+      title: r.title,
+      type: 'Edge',
+      preconditions: `[AC${(i % 3) + 1}] User session is active and system is at configuration limits.`,
+      steps: r.steps,
+      expectedResult: r.result,
+      priority: 'Medium'
+    });
   }
 
-  // 4. Generate Security Cases
   for (let i = 0; i < securityCount; i++) {
-    const rule = uniqueRules[i % uniqueRules.length];
-    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
-    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
-
-    testCases.push(makeTestCase(
-      `Verify unauthorized access constraints on: ${ruleCap}`,
-      "Security",
-      `${acTag} User session is expired, unauthenticated, or has insufficient privileges.`,
-      `1. Direct browse to the URL path or API endpoints for "${rule}".\n2. Attempt to trigger the action.\n3. Check server response.`,
-      `Access is denied immediately. Server returns 401 Unauthorized or 403 Forbidden status, redirecting user to Login page.`,
-      "High"
-    ));
+    testCases.push({
+      title: `Verify authentication check constraints validation`,
+      type: 'Security',
+      preconditions: `[AC1] User session has expired or is unauthenticated.`,
+      steps: `1. Attempt to access secure backend API routes directly using URL.\n2. Observe response validation status.`,
+      expectedResult: `System blocks access and redirects user to login screen with message: "Session expired. Please log in again."`,
+      priority: 'High'
+    });
   }
 
-  // 5. Generate Performance Cases
   for (let i = 0; i < performanceCount; i++) {
-    const rule = uniqueRules[i % uniqueRules.length];
-    const acTag = `[AC${(i % uniqueRules.length) + 1}]`;
-    const ruleCap = rule.charAt(0).toUpperCase() + rule.slice(1);
-
-    testCases.push(makeTestCase(
-      `Verify transaction speed under load for: ${ruleCap}`,
-      "Performance",
-      `${acTag} Simulated database load is active (1000+ records).`,
-      `1. Open developer tools network analyzer.\n2. Trigger the action for "${rule}".\n3. Capture response latency.`,
-      `The operation finishes in under 500ms, maintaining UI responsiveness at 60 FPS.`,
-      "Medium"
-    ));
+    testCases.push({
+      title: `Verify database query performance index response time`,
+      type: 'Performance',
+      preconditions: `[AC1] Database is populated with standard active record index sets.`,
+      steps: `1. Access target module filter controls.\n2. Trigger data retrieval query.\n3. Measure index load response latency.`,
+      expectedResult: `Page load latency is within expected thresholds under normal network payload load limits.`,
+      priority: 'Low'
+    });
   }
 
   return testCases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
