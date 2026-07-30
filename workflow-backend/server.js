@@ -3351,6 +3351,146 @@ app.post('/api/jira/test-connection', async (req, res) => {
   }
 });
 
+// POST Test ADO Connection
+app.post('/api/ado/test-connection', async (req, res) => {
+  try {
+    let { orgUrl, project, pat } = req.body;
+    if (!orgUrl || !project || !pat) {
+      return res.status(400).json({ success: false, error: 'Organization URL, Project, and PAT are required.' });
+    }
+
+    orgUrl = orgUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(orgUrl)) {
+      orgUrl = `https://${orgUrl}`;
+    }
+
+    if (pat === 'mock' || project === 'mock') {
+      return res.json({ success: true, message: 'Mock Sandbox ADO Connection Successful!' });
+    }
+
+    const authString = Buffer.from(`:${pat}`).toString('base64');
+    
+    const response = await fetch(`${orgUrl}/_apis/projects/${encodeURIComponent(project)}?api-version=7.0`, {
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const projectData = await response.json();
+      return res.json({ success: true, projectName: projectData.name, message: `Connected to Project: ${projectData.name}` });
+    } else {
+      let errDetail = 'Invalid credentials or project key';
+      try {
+        const errJson = await response.json();
+        errDetail = errJson.message || errDetail;
+      } catch (_) {
+        const errText = await response.text();
+        errDetail = errText || errDetail;
+      }
+      return res.status(response.status).json({ success: false, error: `Authentication failed (Status ${response.status}): ${errDetail}` });
+    }
+  } catch (error) {
+    console.error('[ADO Connection Test Error]:', error);
+    return res.status(500).json({ success: false, error: `Connection failed: ${error.message}` });
+  }
+});
+
+// POST Push Test Cases to ADO
+app.post('/api/ado/upload', async (req, res) => {
+  try {
+    let { orgUrl, project, pat, testCases } = req.body;
+    if (!orgUrl || !project || !pat || !testCases || !testCases.length) {
+      return res.status(400).json({ success: false, error: 'Missing required fields for ADO upload.' });
+    }
+
+    orgUrl = orgUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(orgUrl)) {
+      orgUrl = `https://${orgUrl}`;
+    }
+
+    if (pat === 'mock') {
+      const mockResult = testCases.map((tc, index) => ({
+        id: `MOCK-ADO-${1000 + index}`,
+        title: tc.title,
+        url: `${orgUrl}/${project}/_workitems/edit/${1000 + index}`
+      }));
+      return res.json({ success: true, createdWorkItems: mockResult });
+    }
+
+    const authString = Buffer.from(`:${pat}`).toString('base64');
+    const createdWorkItems = [];
+
+    for (const tc of testCases) {
+      let descriptionHtml = `<div>`;
+      if (tc.preconditions) {
+        descriptionHtml += `<p><strong>Preconditions:</strong><br/>${tc.preconditions.replace(/\n/g, '<br/>')}</p>`;
+      }
+      if (tc.steps) {
+        descriptionHtml += `<p><strong>Steps:</strong><br/>${tc.steps.replace(/\n/g, '<br/>')}</p>`;
+      }
+      if (tc.expectedResult) {
+        descriptionHtml += `<p><strong>Expected Result:</strong><br/>${tc.expectedResult.replace(/\n/g, '<br/>')}</p>`;
+      }
+      descriptionHtml += `</div>`;
+
+      const patchPayload = [
+        {
+          "op": "add",
+          "path": "/fields/System.Title",
+          "value": `[${tc.type || 'Test'}] ${tc.title || 'QA Test Case'}`
+        },
+        {
+          "op": "add",
+          "path": "/fields/System.Description",
+          "value": descriptionHtml
+        },
+        {
+          "op": "add",
+          "path": "/fields/Microsoft.VSTS.Common.Priority",
+          "value": tc.priority === 'High' ? 1 : tc.priority === 'Medium' ? 2 : 3
+        }
+      ];
+
+      const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/wit/workitems/$Test%20Case?api-version=7.0`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Content-Type': 'application/json-patch+json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(patchPayload)
+      });
+
+      if (!response.ok) {
+        let errText = 'Failed to create work item';
+        try {
+          const errJson = await response.json();
+          errText = errJson.message || errText;
+        } catch (_) {
+          errText = await response.text() || errText;
+        }
+        throw new Error(`ADO Creation failed: ${errText}`);
+      }
+
+      const resData = await response.json();
+      createdWorkItems.push({
+        id: resData.id,
+        title: tc.title,
+        url: resData._links.html.href
+      });
+    }
+
+    return res.json({ success: true, createdWorkItems });
+  } catch (error) {
+    console.error('[ADO Upload Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Backend server (SQL) running on http://localhost:${PORT}`);

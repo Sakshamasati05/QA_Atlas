@@ -28,6 +28,17 @@ export default function ChatAssistant() {
   const [jiraSchema, setJiraSchema] = useState(() => localStorage.getItem('qatlas_jiraSchema') || 'standard');
   const [isTestingJiraConnection, setIsTestingJiraConnection] = useState(false);
   const [jiraConnectionStatus, setJiraConnectionStatus] = useState(null);
+  
+  // ADO Connection states
+  const [adoOrgUrl, setAdoOrgUrl] = useState(() => localStorage.getItem('qatlas_adoOrgUrl') || '');
+  const [adoProject, setAdoProject] = useState(() => localStorage.getItem('qatlas_adoProject') || '');
+  const [adoPat, setAdoPat] = useState(() => localStorage.getItem('qatlas_adoPat') || '');
+  const [tempAdoOrgUrl, setTempAdoOrgUrl] = useState('');
+  const [tempAdoProject, setTempAdoProject] = useState('');
+  const [tempAdoPat, setTempAdoPat] = useState('');
+  const [isTestingAdoConnection, setIsTestingAdoConnection] = useState(false);
+  const [adoConnectionStatus, setAdoConnectionStatus] = useState(null);
+  const [isUploadingToAdo, setIsUploadingToAdo] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
@@ -1852,6 +1863,85 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleTestAdoConnection = async () => {
+    const orgUrlToTest = (tempAdoOrgUrl || '').trim();
+    const projectToTest = (tempAdoProject || '').trim();
+    const patToTest = (tempAdoPat || '').trim();
+
+    if (!orgUrlToTest || !projectToTest || !patToTest) {
+      setAdoConnectionStatus({ success: false, message: 'Please fill Organization URL, Project Name, and Personal Access Token (PAT).' });
+      return;
+    }
+
+    setIsTestingAdoConnection(true);
+    setAdoConnectionStatus(null);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/ado/test-connection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orgUrl: orgUrlToTest,
+          project: projectToTest,
+          pat: patToTest
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAdoConnectionStatus({ 
+          success: true, 
+          message: data.message || `Successfully connected to Project: ${data.projectName}!`
+        });
+      } else {
+        setAdoConnectionStatus({ success: false, message: data.error || 'Connection failed' });
+      }
+    } catch (err) {
+      console.error(err);
+      setAdoConnectionStatus({ success: false, message: 'Failed to communicate with Azure DevOps connection test endpoint' });
+    } finally {
+      setIsTestingAdoConnection(false);
+    }
+  };
+
+  const handlePushToAdo = async () => {
+    if (!adoOrgUrl || !adoProject || !adoPat) {
+      alert('Please configure your Azure DevOps integration credentials in the Settings panel (gear icon) first!');
+      return;
+    }
+    if (testCases.length === 0) {
+      alert('No test cases generated yet to upload!');
+      return;
+    }
+    setIsUploadingToAdo(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/ado/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orgUrl: adoOrgUrl,
+          project: adoProject,
+          pat: adoPat,
+          testCases
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Successfully uploaded ${data.createdWorkItems.length} test cases directly to Azure DevOps project "${adoProject}" as Test Case work items!`);
+      } else {
+        alert(`Azure DevOps upload failed: ${data.error || 'Unknown API error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to establish connection with Azure DevOps endpoint');
+    } finally {
+      setIsUploadingToAdo(false);
+    }
+  };
+
   const handleEnhanceStory = async () => {
     if (!userStory.trim() && !acceptanceCriteria.trim()) {
       alert('Please enter a User Story draft or Acceptance Criteria first.');
@@ -2138,6 +2228,9 @@ _Reported via QAutopilot Execution Engine_`;
     const trimmedJiraEmail = (tempJiraEmail || '').trim();
     const trimmedJiraToken = (tempJiraToken || '').trim();
     const trimmedJiraProject = (tempJiraProject || '').trim();
+    const trimmedAdoOrgUrl = (tempAdoOrgUrl || '').trim();
+    const trimmedAdoProject = (tempAdoProject || '').trim();
+    const trimmedAdoPat = (tempAdoPat || '').trim();
 
     setUserId(tempUserId);
     setProvider(tempProvider);
@@ -2149,6 +2242,9 @@ _Reported via QAutopilot Execution Engine_`;
     setJiraEmail(trimmedJiraEmail);
     setJiraToken(trimmedJiraToken);
     setJiraProject(trimmedJiraProject);
+    setAdoOrgUrl(trimmedAdoOrgUrl);
+    setAdoProject(trimmedAdoProject);
+    setAdoPat(trimmedAdoPat);
 
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
@@ -2160,6 +2256,9 @@ _Reported via QAutopilot Execution Engine_`;
     localStorage.setItem('qatlas_jiraEmail', trimmedJiraEmail);
     localStorage.setItem('qatlas_jiraToken', trimmedJiraToken);
     localStorage.setItem('qatlas_jiraProject', trimmedJiraProject);
+    localStorage.setItem('qatlas_adoOrgUrl', trimmedAdoOrgUrl);
+    localStorage.setItem('qatlas_adoProject', trimmedAdoProject);
+    localStorage.setItem('qatlas_adoPat', trimmedAdoPat);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -2480,6 +2579,10 @@ _Reported via QAutopilot Execution Engine_`;
             setTempJiraToken(jiraToken);
             setTempJiraProject(jiraProject);
             setJiraConnectionStatus(null);
+            setTempAdoOrgUrl(adoOrgUrl);
+            setTempAdoProject(adoProject);
+            setTempAdoPat(adoPat);
+            setAdoConnectionStatus(null);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -3954,6 +4057,64 @@ _Reported via QAutopilot Execution Engine_`;
               </div>
             </div>
 
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontFamily: 'Outfit, sans-serif' }}>🔌 Azure DevOps (ADO) Integration</h4>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ADO Organization URL</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAdoOrgUrl}
+                  onChange={(e) => setTempAdoOrgUrl(e.target.value)}
+                  placeholder="e.g. https://dev.azure.com/your-org"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ADO Project Name</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAdoProject}
+                  onChange={(e) => setTempAdoProject(e.target.value)}
+                  placeholder="e.g. MyProjectName"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>Personal Access Token (PAT)</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempAdoPat}
+                  onChange={(e) => setTempAdoPat(e.target.value)}
+                  placeholder={adoPat ? "••••••••••••••••" : "Paste ADO PAT here..."}
+                />
+              </div>
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  onClick={handleTestAdoConnection} 
+                  disabled={isTestingAdoConnection}
+                  style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)', width: '100%', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px' }}
+                >
+                  {isTestingAdoConnection ? '⚡ Testing Connection...' : '🔌 Test ADO Connection'}
+                </button>
+                {adoConnectionStatus && (
+                  <div style={{ 
+                    padding: '8px 12px', 
+                    borderRadius: '6px', 
+                    fontSize: '12px', 
+                    lineHeight: '1.4',
+                    background: adoConnectionStatus.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                    color: adoConnectionStatus.success ? 'var(--positive-color)' : 'var(--negative-color)',
+                    border: `1px solid ${adoConnectionStatus.success ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+                  }}>
+                    {adoConnectionStatus.success ? '✅ ' : '❌ '} {adoConnectionStatus.message}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <span className="upload-hint" style={{ marginTop: '12px', display: 'block', marginBottom: '8px' }}>
               Keys are saved locally in your browser. If a key is missing for your selected provider, QAutopilot falls back to the advanced heuristic mock generator.
             </span>
@@ -4202,8 +4363,34 @@ _Reported via QAutopilot Execution Engine_`;
                   </div>
                 )}
               </div>
+              
+              <div className="export-section" style={{ marginTop: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Direct Azure DevOps Upload:</strong>
+                {adoOrgUrl && adoProject ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <button
+                        className="btn-primary"
+                        onClick={handlePushToAdo}
+                        disabled={isUploadingToAdo}
+                        style={{ height: '36px', background: 'var(--positive-color)', border: 'none', flex: 1 }}
+                      >
+                        {isUploadingToAdo ? '🚀 Uploading to ADO...' : '🚀 Push to Azure DevOps'}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: '11.5px', color: 'var(--text-sub)' }}>
+                      Connected to project <strong>{adoProject}</strong> at <strong>{adoOrgUrl}</strong>. Test cases will be uploaded as <strong>Test Case</strong> work items.
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '12px', background: 'var(--bg-sidebar)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12.5px', color: 'var(--text-sub)' }}>
+                    <span>Azure DevOps Integration is not configured. Go to <strong>⚙️ Settings</strong> to set up direct ADO upload credentials.</span>
+                  </div>
+                )}
+              </div>
+
               <div className="export-section" style={{ marginTop: '16px' }}>
-                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>4. Export Test Cases Spreadsheet:</strong>
+                <strong style={{ fontSize: '13.5px', display: 'block', marginBottom: '8px' }}>5. Export Test Cases Spreadsheet:</strong>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ padding: '4px 12px', fontSize: '11.5px', background: 'rgba(16, 185, 129, 0.05)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
                     🟢 Download Excel (.xls)
