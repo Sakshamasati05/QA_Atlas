@@ -1296,6 +1296,62 @@ export default function ChatAssistant() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
     };
+
+    let columns = [];
+    if (format === 'LLY TU') {
+      columns = [
+        { label: 'ID', width: 70, style: 'Center', val: (tc) => tc.customId },
+        { label: 'Test Path', width: 150, style: 'Normal', val: (tc) => getCustomField(tc, 'testPath') || '/DefaultPath/Section' },
+        { label: 'Type', width: 90, style: 'Center', val: (tc) => tc.type },
+        { label: 'Test Name', width: 200, style: 'Normal', val: (tc) => tc.title },
+        { label: 'Designer', width: 100, style: 'Center', val: (tc) => getCustomField(tc, 'designer') || 'QA Team' },
+        { label: 'Category', width: 100, style: 'Center', val: (tc) => getCustomField(tc, 'category') || 'General' },
+        { label: 'Description', width: 200, style: 'Normal', val: (tc) => getCustomField(tc, 'description') || tc.title },
+        { label: 'Preconditions', width: 200, style: 'Normal', val: (tc) => tc.preconditions },
+        { label: 'Step Name', width: 120, style: 'Normal', val: (tc) => getCustomField(tc, 'stepName') || 'Perform Action' },
+        { label: 'Step Description', width: 300, style: 'Normal', val: (tc) => tc.steps },
+        { label: 'Expected Result', width: 300, style: 'Normal', val: (tc) => tc.expectedResult },
+        { label: 'Evidence Required', width: 120, style: 'Center', val: (tc) => getCustomField(tc, 'evidenceRequired') || 'No' },
+        { label: 'Priority', width: 80, style: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else if (format === 'LLY PBPA') {
+      columns = [
+        { label: 'ID', width: 70, style: 'Center', val: (tc) => tc.customId },
+        { label: 'Test Summary', width: 200, style: 'Normal', val: (tc) => tc.title },
+        { label: 'Type', width: 90, style: 'Center', val: (tc) => tc.type },
+        { label: 'Preconditions', width: 200, style: 'Normal', val: (tc) => tc.preconditions },
+        { label: 'Test Case Description', width: 250, style: 'Normal', val: (tc) => getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title },
+        { label: 'Steps To Be Followed', width: 300, style: 'Normal', val: (tc) => tc.steps },
+        { label: 'Expected Result', width: 300, style: 'Normal', val: (tc) => tc.expectedResult },
+        { label: 'Actual Result', width: 120, style: 'Normal', val: (tc) => getCustomField(tc, 'actualResult') || 'N/A' },
+        { label: 'Priority', width: 80, style: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else if (format === 'DEL') {
+      columns = [
+        { label: 'ID', width: 70, style: 'Center', val: (tc) => tc.customId },
+        { label: 'Description', width: 200, style: 'Normal', val: (tc) => tc.title },
+        { label: 'Type', width: 90, style: 'Center', val: (tc) => tc.type },
+        { label: 'Preconditions', width: 200, style: 'Normal', val: (tc) => tc.preconditions },
+        { label: 'Test Data', width: 150, style: 'Normal', val: (tc) => getCustomField(tc, 'testData') || 'Valid credentials' },
+        { label: 'Test Steps', width: 300, style: 'Normal', val: (tc) => tc.steps },
+        { label: 'Expected Result', width: 300, style: 'Normal', val: (tc) => tc.expectedResult },
+        { label: 'Actual Result', width: 120, style: 'Normal', val: (tc) => getCustomField(tc, 'actualResult') || 'N/A' },
+        { label: 'Status', width: 100, style: 'Center', val: (tc) => getCustomField(tc, 'status') || 'Pending' },
+        { label: 'Bug ID', width: 100, style: 'Center', val: (tc) => getCustomField(tc, 'bugId') || 'N/A' },
+        { label: 'Priority', width: 80, style: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else {
+      columns = [
+        { label: 'ID', width: 70, style: 'Center', val: (tc) => tc.customId },
+        { label: 'Title', width: 200, style: 'Normal', val: (tc) => tc.title },
+        { label: 'Description', width: 250, style: 'Normal', val: (tc) => getCustomField(tc, 'description') || 'Verify functional flow.' },
+        { label: 'Type', width: 90, style: 'Center', val: (tc) => tc.type },
+        { label: 'Preconditions', width: 200, style: 'Normal', val: (tc) => tc.preconditions },
+        { label: 'Steps', width: 300, style: 'Normal', val: (tc) => tc.steps },
+        { label: 'Expected Result', width: 300, style: 'Normal', val: (tc) => tc.expectedResult },
+        { label: 'Priority', width: 80, style: 'Priority', val: (tc) => tc.priority }
+      ];
+    }
     
     let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
     xml += '<?mso-application progid="Excel.Sheet"?>\n';
@@ -1416,64 +1472,60 @@ export default function ChatAssistant() {
     xml += ' <Worksheet ss:Name="Test Cases">\n';
     xml += '  <Table>\n';
     
-    xml += '   <Column ss:Width="70"/>\n';   // ID
-    xml += '   <Column ss:Width="200"/>\n';  // Title
-    xml += '   <Column ss:Width="100"/>\n';  // Type
-    xml += '   <Column ss:Width="80"/>\n';   // Priority
-    xml += '   <Column ss:Width="200"/>\n';  // Preconditions
-    xml += '   <Column ss:Width="300"/>\n';  // Steps
-    xml += '   <Column ss:Width="300"/>\n';  // Expected Result
+    columns.forEach(col => {
+      xml += `   <Column ss:Width="${col.width}"/>\n`;
+    });
     
     xml += '   <Row ss:Height="30">\n';
-    xml += '    <Cell ss:MergeAcross="6" ss:StyleID="TitleStyle"><Data ss:Type="String">QAutopilot QA Test Suite Report</Data></Cell>\n';
+    xml += `    <Cell ss:MergeAcross="${columns.length - 1}" ss:StyleID="TitleStyle"><Data ss:Type="String">QAutopilot QA Test Suite Report (${format} Format)</Data></Cell>\n`;
     xml += '   </Row>\n';
     
     const dateStr = new Date().toLocaleDateString();
     xml += '   <Row ss:Height="20">\n';
     xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">User Story:</Data></Cell>\n';
-    xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String">${cleanXml(activeStory?.title || 'Custom Test Suite')}</Data></Cell>\n`;
+    xml += `    <Cell ss:MergeAcross="1" ss:StyleID="MetaValueStyle"><Data ss:Type="String">${cleanXml(activeStory?.title || 'Custom Test Suite')}</Data></Cell>\n`;
     xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">Export Date:</Data></Cell>\n';
     xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String">${dateStr}</Data></Cell>\n`;
     xml += '    <Cell ss:StyleID="MetaLabelStyle"><Data ss:Type="String">Total Cases:</Data></Cell>\n';
     xml += `    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="Number">${testCases.length}</Data></Cell>\n`;
-    xml += '    <Cell ss:StyleID="MetaValueStyle"><Data ss:Type="String"></Data></Cell>\n';
     xml += '   </Row>\n';
     
     xml += '   <Row ss:Height="12"></Row>\n';
     
     xml += '   <Row ss:Height="26" ss:StyleID="HeaderStyle">\n';
-    xml += '    <Cell><Data ss:Type="String">ID</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Title</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Type</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Priority</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Preconditions</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Steps</Data></Cell>\n';
-    xml += '    <Cell><Data ss:Type="String">Expected Result</Data></Cell>\n';
+    columns.forEach(col => {
+      xml += `    <Cell><Data ss:Type="String">${col.label}</Data></Cell>\n`;
+    });
     xml += '   </Row>\n';
     
     testCases.forEach((tc, idx) => {
       const isZebra = idx % 2 === 1;
-      const normalStyle = isZebra ? 'ss:StyleID="ZebraCell"' : 'ss:StyleID="NormalCell"';
-      const centerStyle = isZebra ? 'ss:StyleID="CenterZebraCell"' : 'ss:StyleID="CenterCell"';
-      
-      const priorityText = (tc.priority || '').trim().toLowerCase();
-      let priorityStyle = centerStyle;
-      if (priorityText.includes('high') || priorityText.includes('critical')) {
-        priorityStyle = isZebra ? 'ss:StyleID="HighPriorityZebraCell"' : 'ss:StyleID="HighPriorityCell"';
-      } else if (priorityText.includes('medium') || priorityText.includes('med')) {
-        priorityStyle = isZebra ? 'ss:StyleID="MedPriorityZebraCell"' : 'ss:StyleID="MedPriorityCell"';
-      } else if (priorityText.includes('low')) {
-        priorityStyle = isZebra ? 'ss:StyleID="LowPriorityZebraCell"' : 'ss:StyleID="LowPriorityCell"';
-      }
-      
       xml += '   <Row>\n';
-      xml += `    <Cell ${centerStyle}><Data ss:Type="String">${cleanXml(tc.customId || 'TC')}</Data></Cell>\n`;
-      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.title)}</Data></Cell>\n`;
-      xml += `    <Cell ${centerStyle}><Data ss:Type="String">${cleanXml(tc.type)}</Data></Cell>\n`;
-      xml += `    <Cell ${priorityStyle}><Data ss:Type="String">${cleanXml(tc.priority)}</Data></Cell>\n`;
-      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.preconditions)}</Data></Cell>\n`;
-      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.steps)}</Data></Cell>\n`;
-      xml += `    <Cell ${normalStyle}><Data ss:Type="String">${cleanXml(tc.expectedResult)}</Data></Cell>\n`;
+      
+      columns.forEach(col => {
+        const valStr = cleanXml(col.val(tc));
+        let cellStyle = '';
+        
+        if (col.style === 'Center') {
+          cellStyle = isZebra ? 'ss:StyleID="CenterZebraCell"' : 'ss:StyleID="CenterCell"';
+        } else if (col.style === 'Priority') {
+          const priorityText = (tc.priority || '').trim().toLowerCase();
+          let priorityValStyle = isZebra ? 'ss:StyleID="CenterZebraCell"' : 'ss:StyleID="CenterCell"';
+          if (priorityText.includes('high') || priorityText.includes('critical')) {
+            priorityValStyle = isZebra ? 'ss:StyleID="HighPriorityZebraCell"' : 'ss:StyleID="HighPriorityCell"';
+          } else if (priorityText.includes('medium') || priorityText.includes('med')) {
+            priorityValStyle = isZebra ? 'ss:StyleID="MedPriorityZebraCell"' : 'ss:StyleID="MedPriorityCell"';
+          } else if (priorityText.includes('low')) {
+            priorityValStyle = isZebra ? 'ss:StyleID="LowPriorityZebraCell"' : 'ss:StyleID="LowPriorityCell"';
+          }
+          cellStyle = priorityValStyle;
+        } else {
+          cellStyle = isZebra ? 'ss:StyleID="ZebraCell"' : 'ss:StyleID="NormalCell"';
+        }
+        
+        xml += `    <Cell ${cellStyle}><Data ss:Type="String">${valStr}</Data></Cell>\n`;
+      });
+      
       xml += '   </Row>\n';
     });
     
@@ -1503,7 +1555,7 @@ export default function ChatAssistant() {
     const element = document.createElement("a");
     const file = new Blob([xml], {type: 'application/vnd.ms-excel'});
     element.href = URL.createObjectURL(file);
-    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.xls`;
+    element.download = `QAutopilot_TestCases_${format.replace(/\s+/g, '_')}_${activeStory?.id || 'export'}.xls`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -1523,22 +1575,73 @@ export default function ChatAssistant() {
       }
       return stringVal;
     };
+
+    let columns = [];
+    if (format === 'LLY TU') {
+      columns = [
+        { label: 'ID', val: (tc) => tc.customId },
+        { label: 'Test Path', val: (tc) => getCustomField(tc, 'testPath') || '/DefaultPath/Section' },
+        { label: 'Type', val: (tc) => tc.type },
+        { label: 'Test Name', val: (tc) => tc.title },
+        { label: 'Designer', val: (tc) => getCustomField(tc, 'designer') || 'QA Team' },
+        { label: 'Category', val: (tc) => getCustomField(tc, 'category') || 'General' },
+        { label: 'Description', val: (tc) => getCustomField(tc, 'description') || tc.title },
+        { label: 'Preconditions', val: (tc) => tc.preconditions },
+        { label: 'Step Name', val: (tc) => getCustomField(tc, 'stepName') || 'Perform Action' },
+        { label: 'Step Description', val: (tc) => tc.steps },
+        { label: 'Expected Result', val: (tc) => tc.expectedResult },
+        { label: 'Evidence Required', val: (tc) => getCustomField(tc, 'evidenceRequired') || 'No' },
+        { label: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else if (format === 'LLY PBPA') {
+      columns = [
+        { label: 'ID', val: (tc) => tc.customId },
+        { label: 'Test Summary', val: (tc) => tc.title },
+        { label: 'Type', val: (tc) => tc.type },
+        { label: 'Preconditions', val: (tc) => tc.preconditions },
+        { label: 'Test Case Description', val: (tc) => getCustomField(tc, 'testCaseDescription') || getCustomField(tc, 'description') || tc.title },
+        { label: 'Steps To Be Followed', val: (tc) => tc.steps },
+        { label: 'Expected Result', val: (tc) => tc.expectedResult },
+        { label: 'Actual Result', val: (tc) => getCustomField(tc, 'actualResult') || 'N/A' },
+        { label: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else if (format === 'DEL') {
+      columns = [
+        { label: 'ID', val: (tc) => tc.customId },
+        { label: 'Description', val: (tc) => tc.title },
+        { label: 'Type', val: (tc) => tc.type },
+        { label: 'Preconditions', val: (tc) => tc.preconditions },
+        { label: 'Test Data', val: (tc) => getCustomField(tc, 'testData') || 'Valid credentials' },
+        { label: 'Test Steps', val: (tc) => tc.steps },
+        { label: 'Expected Result', val: (tc) => tc.expectedResult },
+        { label: 'Actual Result', val: (tc) => getCustomField(tc, 'actualResult') || 'N/A' },
+        { label: 'Status', val: (tc) => getCustomField(tc, 'status') || 'Pending' },
+        { label: 'Bug ID', val: (tc) => getCustomField(tc, 'bugId') || 'N/A' },
+        { label: 'Priority', val: (tc) => tc.priority }
+      ];
+    } else {
+      columns = [
+        { label: 'ID', val: (tc) => tc.customId },
+        { label: 'Title', val: (tc) => tc.title },
+        { label: 'Description', val: (tc) => getCustomField(tc, 'description') || 'Verify functional flow.' },
+        { label: 'Type', val: (tc) => tc.type },
+        { label: 'Preconditions', val: (tc) => tc.preconditions },
+        { label: 'Steps', val: (tc) => tc.steps },
+        { label: 'Expected Result', val: (tc) => tc.expectedResult },
+        { label: 'Priority', val: (tc) => tc.priority }
+      ];
+    }
     
-    let csvContent = 'ID,Title,Type,Priority,Preconditions,Steps,Expected Result\n';
+    let csvContent = columns.map(c => escapeCsv(c.label)).join(',') + '\n';
+    
     testCases.forEach(tc => {
-      csvContent += `${escapeCsv(tc.customId || 'TC')},`;
-      csvContent += `${escapeCsv(tc.title)},`;
-      csvContent += `${escapeCsv(tc.type)},`;
-      csvContent += `${escapeCsv(tc.priority)},`;
-      csvContent += `${escapeCsv(tc.preconditions)},`;
-      csvContent += `${escapeCsv(tc.steps)},`;
-      csvContent += `${escapeCsv(tc.expectedResult)}\n`;
+      csvContent += columns.map(c => escapeCsv(c.val(tc))).join(',') + '\n';
     });
     
     const csvBlob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8' });
     const element = document.createElement("a");
     element.href = URL.createObjectURL(csvBlob);
-    element.download = `QAutopilot_TestCases_${activeStory?.id || 'export'}.csv`;
+    element.download = `QAutopilot_TestCases_${format.replace(/\s+/g, '_')}_${activeStory?.id || 'export'}.csv`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
