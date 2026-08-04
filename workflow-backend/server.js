@@ -5,6 +5,19 @@ const fs = require('fs');
 const multer = require('multer');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
+
+// Auto-Bootstrap Prisma Database & Client on Startup
+const { execSync } = require('child_process');
+try {
+  console.log('[Prisma Bootstrap] Syncing database schema to local SQLite database...');
+  execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit', cwd: __dirname });
+  console.log('[Prisma Bootstrap] Generating Prisma Client locally...');
+  execSync('npx prisma generate', { stdio: 'inherit', cwd: __dirname });
+  console.log('[Prisma Bootstrap] Auto-bootstrapping completed successfully!');
+} catch (err) {
+  console.error('[Prisma Bootstrap Warning] Auto-bootstrap failed (will attempt standard loading):', err.message);
+}
+
 const { PrismaClient } = require('./node_modules/@prisma/client');
 
 // Load environment variables from .env manually
