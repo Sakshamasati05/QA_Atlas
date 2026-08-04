@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workorder Records - Operations Console</title>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-container">
+        <div class="logo-icon-bg">
+          <svg class="logo-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>Workorder Records</h1>
+          <span class="logo-subtext">OPERATIONS CONSOLE</span>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="#" class="nav-link active" id="nav-workorders-btn">Workorders</a>
+      </nav>
+    </div>
+    
+    <div class="header-right">
+      <button class="header-action-btn" title="Information" id="info-btn">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </button>
+      
+      <div class="user-profile">
+        <div class="profile-avatar">AM</div>
+        <span class="profile-name">Alex Morgan</span>
+      </div>
+      
+      <button class="header-action-btn logout-btn" title="Logout" id="logout-btn">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    
+    <!-- DASHBOARD VIEW: List of all Workorders -->
+    <section id="dashboard-view" class="view-section">
+      <div class="dashboard-header-row">
+        <div>
+          <h2 class="view-title">Workorders Directory</h2>
+          <p class="view-subtitle">Manage, approve, and track operations records</p>
+        </div>
+        <button class="btn btn-primary" id="create-wo-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Workorder
+        </button>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card" data-filter="all">
+          <div class="stat-label">Total Workorders</div>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+        <div class="stat-card stat-approved" data-filter="Approved">
+          <div class="stat-label">Approved</div>
+          <div class="stat-value" id="stat-approved">0</div>
+        </div>
+        <div class="stat-card stat-not-approved" data-filter="Not Approved">
+          <div class="stat-label">Not Approved</div>
+          <div class="stat-value" id="stat-not-approved">0</div>
+        </div>
+        <div class="stat-card stat-cancelled" data-filter="Cancelled">
+          <div class="stat-label">Cancelled</div>
+          <div class="stat-value" id="stat-cancelled">0</div>
+        </div>
+      </div>
+
+      <!-- Filters & Search Controls -->
+      <div class="controls-card">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="wo-search" placeholder="Search by ID or title...">
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Status:</span>
+          <div class="btn-group" id="status-filters">
+            <button class="btn btn-secondary active" data-filter="all">All</button>
+            <button class="btn btn-secondary" data-filter="Approved">Approved</button>
+            <button class="btn btn-secondary" data-filter="Not Approved">Not Approved</button>
+            <button class="btn btn-secondary" data-filter="Cancelled">Cancelled</button>
+            <button class="btn btn-secondary" data-filter="Pending">Pending</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workorders Table Card -->
+      <div class="table-card">
+        <table class="wo-table">
+          <thead>
+            <tr>
+              <th>Workorder ID</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>QA Passed</th>
+              <th>Created By</th>
+              <th>Date</th>
+              <th>Groups</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="workorders-list-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+        <div class="empty-state hidden" id="wo-empty-state">
+          <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="empty-icon">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          <h3>No Workorders Found</h3>
+          <p>Try resetting filters or create a new workorder records template.</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- DETAIL VIEW: Detailed inspection of a selected Workorder -->
+    <section id="detail-view" class="view-section hidden">
+      <!-- Breadcrumbs and Navigation -->
+      <div class="breadcrumb-container">
+        <button class="back-link-btn" id="detail-back-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+        <div class="breadcrumbs">
+          <span class="breadcrumb-item" id="crumb-root">Workorders</span>
+          <span class="breadcrumb-separator">></span>
+          <span class="breadcrumb-item" id="crumb-id">WO-XXXX</span>
+          <span class="breadcrumb-separator">></span>
+          <span class="breadcrumb-item active" id="crumb-title">loading...</span>
+        </div>
+      </div>
+
+      <!-- Workorder Meta Info Row -->
+      <div class="detail-meta-header">
+        <div class="meta-left">
+          <div class="meta-id-row">
+            <span class="meta-wo-id" id="detail-wo-id">WO-XXXX</span>
+            <span class="status-dot-badge status-badge-grey" id="detail-status-badge">
+              <span class="dot">•</span> <span class="text">Loading</span>
+            </span>
+            <span class="view-only-label" id="edit-mode-label">View only</span>
+          </div>
+          <h2 class="detail-title" id="detail-wo-title">Loading Workorder...</h2>
+          <div class="detail-creator" id="detail-wo-creator">Created by -- · --</div>
+        </div>
+        
+        <div class="meta-right">
+          <!-- Toggle Edit Mode -->
+          <div class="mode-toggle-container">
+            <span class="toggle-text">Interactive Edit Mode</span>
+            <label class="switch">
+              <input type="checkbox" id="edit-mode-toggle">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <button class="btn btn-secondary hidden" id="delete-wo-action-btn">
+            Delete Workorder
+          </button>
+        </div>
+      </div>
+
+      <!-- Approval Record Card -->
+      <div class="approval-card">
+        <div class="card-header-small">APPROVAL RECORD</div>
+        <div class="approval-columns">
+          
+          <div class="approval-col">
+            <div class="col-label">OUTCOME</div>
+            <div class="col-val-container" id="outcome-display-container">
+              <span class="status-dot-badge status-badge-grey" id="detail-outcome-badge">
+                <span class="dot">•</span> <span class="text">Loading</span>
+              </span>
+            </div>
+            <div class="col-val-container hidden" id="outcome-edit-container">
+              <select id="edit-outcome-select" class="form-control-compact">
+                <option value="Approved">Approved</option>
+                <option value="Not Approved">Not Approved</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="approval-col">
+            <div class="col-label">REVIEWED BY</div>
+            <div class="col-val" id="detail-reviewed-by">--</div>
+            <div class="col-val-container hidden" id="reviewed-by-edit-container">
+              <input type="text" id="edit-reviewed-by-input" class="form-control-compact" value="Alex Morgan">
+            </div>
+          </div>
+
+          <div class="approval-col">
+            <div class="col-label">QA PASSED</div>
+            <div class="col-val" id="detail-qa-passed">--</div>
+            <div class="col-val-container hidden" id="qa-passed-edit-container">
+              <select id="edit-qa-passed-select" class="form-control-compact">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Shown only if NOT APPROVED -->
+          <div class="approval-col hidden" id="rejection-reason-col">
+            <div class="col-label text-error">REJECTION REASON</div>
+            <div class="col-val text-error font-medium" id="detail-rejection-reason">--</div>
+            <div class="col-val-container hidden" id="rejection-reason-edit-container">
+              <input type="text" id="edit-rejection-reason-input" class="form-control-compact" placeholder="Reason for rejection">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Split Layout: Groups Sidebar and Items Table -->
+      <div class="details-split-layout">
+        
+        <!-- Left Side: GROUPS card -->
+        <div class="split-left-card">
+          <div class="split-card-header">
+            <div>
+              <div class="card-header-small">GROUPS</div>
+              <div class="groups-total" id="groups-count-summary">0 total</div>
+            </div>
+            <!-- Add Group Trigger (Visible only in edit mode) -->
+            <button class="btn-icon-add hidden" id="add-group-trigger" title="Add Group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+          
+          <ul class="groups-list" id="groups-list-container">
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
+
+        <!-- Right Side: Item list of active Group -->
+        <div class="split-right-card">
+          <div class="group-details-header">
+            <div>
+              <div class="group-breadcrumb">
+                <span id="group-crumb-wo">WO-XXXX</span>
+                <span class="sep">></span>
+                <span id="group-crumb-group">group_name</span>
+              </div>
+              <h3 class="group-items-title" id="items-count-heading">0 items in this group</h3>
+            </div>
+            <!-- Add Item Trigger (Visible only in edit mode) -->
+            <button class="btn btn-secondary btn-sm hidden" id="add-item-trigger">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Item
+            </button>
+          </div>
+
+          <!-- Items Table -->
+          <div class="items-table-container">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th width="8%">#</th>
+                  <th>ITEM NAME</th>
+                  <th>CATEGORY</th>
+                  <th width="15%" class="text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="items-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+            
+            <div class="empty-state hidden" id="items-empty-state">
+              <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="empty-icon">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <h3>No Items in this Group</h3>
+              <p>Turn on edit mode and add items to this category group.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODALS -->
+  <!-- Create Workorder Modal -->
+  <div class="modal-backdrop hidden" id="create-wo-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Create New Workorder Record</h3>
+        <button class="modal-close-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="create-wo-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-wo-id" class="form-label">Workorder ID *</label>
+              <input type="text" id="new-wo-id" class="form-control" placeholder="e.g. WO-1048" required>
+            </div>
+            <div class="form-group">
+              <label for="new-wo-title" class="form-label">Title *</label>
+              <input type="text" id="new-wo-title" class="form-control" placeholder="e.g. sccedv3e" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-wo-outcome" class="form-label">Outcome Status *</label>
+              <select id="new-wo-outcome" class="form-control" required>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Not Approved">Not Approved</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="new-wo-reviewer" class="form-label">Reviewed By *</label>
+              <input type="text" id="new-wo-reviewer" class="form-control" value="Alex Morgan" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-wo-qa" class="form-label">QA Passed</label>
+              <select id="new-wo-qa" class="form-control">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group" id="modal-rejection-group">
+              <label for="new-wo-rejection" class="form-label">Rejection Reason</label>
+              <input type="text" id="new-wo-rejection" class="form-control" placeholder="Only for Not Approved status">
+            </div>
+          </div>
+          
+          <div class="alert-info-box">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Creating a workorder will initialize it with a default group and sample items which you can modify.</span>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Workorder</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Group Modal -->
+  <div class="modal-backdrop hidden" id="add-group-modal">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">Add New Group</h3>
+        <button class="modal-close-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="add-group-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-group-name" class="form-label">Group Name *</label>
+            <input type="text" id="new-group-name" class="form-control" placeholder="e.g. cedcedv" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Group</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add/Edit Item Modal -->
+  <div class="modal-backdrop hidden" id="item-modal">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="item-modal-title">Add New Item</h3>
+        <button class="modal-close-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="item-form">
+        <input type="hidden" id="item-edit-index" value="">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="item-name-input" class="form-label">Item Name *</label>
+            <input type="text" id="item-name-input" class="form-control" placeholder="e.g. scscs" required>
+          </div>
+          <div class="form-group">
+            <label for="item-category-select" class="form-label">Category Badge *</label>
+            <select id="item-category-select" class="form-control" required>
+              <option value="String">String</option>
+              <option value="Numeric">Numeric</option>
+              <option value="Image">Image</option>
+              <option value="Single Select">Single Select</option>
+              <option value="Date">Date</option>
+              <option value="Label Code">Label Code</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary" id="item-modal-submit-btn">Add Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+</body>
+</html>
