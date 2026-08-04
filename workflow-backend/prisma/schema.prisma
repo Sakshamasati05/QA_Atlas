@@ -107,3 +107,11 @@ model TestCase {
   userStoryId       String
   userStory         UserStory @relation(fields: [userStoryId], references: [id], onDelete: Cascade)
 }
+
+model User {
+  id        String   @id
+  email     String   @unique
+  password  String
+  name      String
+  createdAt String
+}

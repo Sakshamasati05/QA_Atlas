@@ -8,8 +8,32 @@ export default function ChatAssistant() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState('generator'); // 'generator', 'repository', 'history'
 
-  // Settings & User Segregation State
-  const [userId, setUserId] = useState(() => localStorage.getItem('qatlas_userId') || 'Alex Morgan');
+  // Authentication & Session State
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qatlas_currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+
+  const [userId, setUserId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qatlas_currentUser');
+      const userObj = saved ? JSON.parse(saved) : null;
+      return userObj ? userObj.id : 'default-user';
+    } catch (_) {
+      return 'default-user';
+    }
+  });
+
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authError, setAuthError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [provider, setProvider] = useState(() => localStorage.getItem('qatlas_provider') || 'gemini');
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('qatlas_geminiKey') || '');
   const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem('qatlas_claudeKey') || '');
@@ -1942,6 +1966,67 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleAuthSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    
+    const emailToTest = (authEmail || '').trim();
+    const passwordToTest = (authPassword || '').trim();
+    const nameToTest = (authName || '').trim();
+
+    if (!emailToTest || !passwordToTest) {
+      setAuthError('Email and Password are required.');
+      return;
+    }
+
+    if (authMode === 'signup' && !nameToTest) {
+      setAuthError('Full Name is required for registration.');
+      return;
+    }
+
+    setIsAuthenticating(true);
+    try {
+      const endpoint = authMode === 'signup' ? '/auth/register' : '/auth/login';
+      const payload = authMode === 'signup' 
+        ? { name: nameToTest, email: emailToTest, password: passwordToTest }
+        : { email: emailToTest, password: passwordToTest };
+
+      const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCurrentUser(data.user);
+        setUserId(data.user.id);
+        localStorage.setItem('qatlas_currentUser', JSON.stringify(data.user));
+        localStorage.setItem('qatlas_userId', data.user.id);
+        setAuthEmail('');
+        setAuthPassword('');
+        setAuthName('');
+      } else {
+        setAuthError(data.error || 'Authentication failed. Please verify credentials.');
+      }
+    } catch (err) {
+      console.error('[Auth Request Error]:', err);
+      setAuthError('Unable to connect to the authentication server.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setUserId('default-user');
+    localStorage.removeItem('qatlas_currentUser');
+    localStorage.setItem('qatlas_userId', 'default-user');
+    setActiveTab('generator');
+  };
+
   const handleEnhanceStory = async () => {
     if (!userStory.trim() && !acceptanceCriteria.trim()) {
       alert('Please enter a User Story draft or Acceptance Criteria first.');
@@ -2464,6 +2549,71 @@ _Reported via QAutopilot Execution Engine_`;
     </div>
   );
 
+  if (!currentUser) {
+    return (
+      <div className="qautopilot-auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-logo">Q</div>
+            <h2>QAutopilot Console</h2>
+            <p>{authMode === 'login' ? 'Sign in to access your QA Test repository' : 'Create an account to manage your projects'}</p>
+          </div>
+          
+          <form onSubmit={handleAuthSubmit} className="auth-form">
+            {authMode === 'signup' && (
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Alex Morgan"
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+            
+            <div className="form-group">
+              <label>Email Address</label>
+              <input
+                type="email"
+                placeholder="e.g. alex@company.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                placeholder="Enter password..."
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                required
+              />
+            </div>
+            
+            {authError && <div className="auth-error-alert">{authError}</div>}
+            
+            <button type="submit" className="btn-primary auth-submit-btn" disabled={isAuthenticating}>
+              {isAuthenticating ? '⏳ Processing...' : authMode === 'login' ? '🔑 Sign In' : '📝 Create Account'}
+            </button>
+          </form>
+          
+          <div className="auth-toggle">
+            {authMode === 'login' ? (
+              <span>Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('signup'); setAuthError(''); }}>Register here</a></span>
+            ) : (
+              <span>Already have an account? <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('login'); setAuthError(''); }}>Sign in here</a></span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="qautopilot-container">
       {/* Sidebar Overlay */}
@@ -2564,6 +2714,27 @@ _Reported via QAutopilot Execution Engine_`;
             </div>
           ))}
         </div>
+
+        {/* User Profile Widget */}
+        {currentUser && (
+          <div className="sidebar-user-widget">
+            <div className="user-widget-info">
+              <div className="user-widget-avatar">
+                {(currentUser.name || 'U')[0].toUpperCase()}
+              </div>
+              <div className="user-widget-details">
+                <span className="user-widget-name">{currentUser.name}</span>
+                <span className="user-widget-email">{currentUser.email}</span>
+              </div>
+            </div>
+            <button className="btn-logout" onClick={handleLogout}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Logout
+            </button>
+          </div>
+        )}
 
         {/* Settings Bar */}
         <div className="sidebar-settings" style={{ display: 'flex', gap: '8px' }}>

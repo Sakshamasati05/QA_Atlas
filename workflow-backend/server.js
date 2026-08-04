@@ -29,9 +29,96 @@ try {
 }
 
 const prisma = new PrismaClient();
+const crypto = require('crypto');
+
+function hashPassword(password) {
+  const salt = 'qautopilot_salt_123!';
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Auth Endpoints
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Name, email, and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: cleanEmail }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'A user with this email address already exists.' });
+    }
+
+    const hashedPassword = hashPassword(password);
+
+    const newUser = await prisma.user.create({
+      data: {
+        id: 'USR-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        email: cleanEmail,
+        name: cleanName,
+        password: hashedPassword,
+        createdAt: new Date().toISOString()
+      }
+    });
+
+    return res.json({
+      success: true,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name
+      }
+    });
+  } catch (error) {
+    console.error('[Register Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email: cleanEmail }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: 'Invalid email or password.' });
+    }
+
+    const hashedPassword = hashPassword(password);
+    if (user.password !== hashedPassword) {
+      return res.status(400).json({ success: false, error: 'Invalid email or password.' });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
+    });
+  } catch (error) {
+    console.error('[Login Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Ensure upload dirs exist
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
