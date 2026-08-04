@@ -5,7 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require('./node_modules/@prisma/client');
 
 // Load environment variables from .env manually
 try {
