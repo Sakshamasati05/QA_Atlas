@@ -1486,12 +1486,29 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
   let priority = tc.priority || 'Medium';
   let customFieldsObj = {};
 
+  let creatorName = 'QA Team';
+  try {
+    const story = await prisma.userStory.findUnique({
+      where: { id: storyId }
+    });
+    if (story && story.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: story.userId }
+      });
+      if (user) {
+        creatorName = user.name;
+      }
+    }
+  } catch (err) {
+    console.warn('[Creator Name Resolution Error]:', err);
+  }
+
   if (format === 'LLY TU') {
     title = tc.testName || tc.title || 'Generated Scenario';
     steps = tc.stepDescription || tc.steps || '1. Action.';
     customFieldsObj = {
       testPath: tc.testPath || 'N/A',
-      designer: tc.designer || 'QA Team',
+      designer: tc.designer || creatorName,
       category: tc.category || 'N/A',
       description: tc.description || tc.title || tc.testName || 'Verify the functional flow of this test case.',
       stepName: tc.stepName || 'N/A',

@@ -4098,12 +4098,12 @@ _Reported via QAutopilot Execution Engine_`;
               <input
                 type="text"
                 className="sidebar-input"
-                value={tempUserId}
-                onChange={(e) => setTempUserId(e.target.value)}
-                placeholder="e.g. Alex Morgan"
+                value={currentUser ? `${currentUser.name} (${currentUser.email})` : 'Guest User'}
+                disabled
+                style={{ background: 'var(--bg-sidebar)', opacity: 0.8, cursor: 'not-allowed' }}
               />
               <span className="upload-hint" style={{ marginTop: '2px' }}>
-                Toggle user profiles to demonstrate complete SQLite record segregation.
+                Active user is locked to the logged-in profile. Log out to switch accounts.
               </span>
             </div>
 
