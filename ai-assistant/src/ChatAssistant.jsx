@@ -2813,6 +2813,22 @@ _Reported via QAutopilot Execution Engine_`;
                     <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                       🟢 Download Excel
                     </button>
+                    <button 
+                      className="btn-secondary" 
+                      onClick={handlePushToJira} 
+                      disabled={isUploadingToJira}
+                      style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', border: '1px solid rgba(99, 102, 241, 0.2)' }}
+                    >
+                      {isUploadingToJira ? '🚀 Uploading...' : '🔵 Push to Jira'}
+                    </button>
+                    <button 
+                      className="btn-secondary" 
+                      onClick={handlePushToAdo} 
+                      disabled={isUploadingToAdo}
+                      style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}
+                    >
+                      {isUploadingToAdo ? '🚀 Uploading...' : '🟢 Push to ADO'}
+                    </button>
                     <button
                       className="btn-secondary"
                       onClick={handleOptimizeSuite}
