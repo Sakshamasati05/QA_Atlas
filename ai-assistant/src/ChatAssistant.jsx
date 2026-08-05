@@ -2715,26 +2715,7 @@ _Reported via QAutopilot Execution Engine_`;
           ))}
         </div>
 
-        {/* User Profile Widget */}
-        {currentUser && (
-          <div className="sidebar-user-widget">
-            <div className="user-widget-info">
-              <div className="user-widget-avatar">
-                {(currentUser.name || 'U')[0].toUpperCase()}
-              </div>
-              <div className="user-widget-details">
-                <span className="user-widget-name">{currentUser.name}</span>
-                <span className="user-widget-email">{currentUser.email}</span>
-              </div>
-            </div>
-            <button className="btn-logout" onClick={handleLogout}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Logout
-            </button>
-          </div>
-        )}
+
 
         {/* Settings Bar */}
         <div className="sidebar-settings" style={{ display: 'flex', gap: '8px' }}>
@@ -2779,19 +2760,42 @@ _Reported via QAutopilot Execution Engine_`;
         </div>
 
         {/* Navigation Tabs */}
-        <div className="tabs-navigation">
-          <button className={`tab-btn ${activeTab === 'generator' ? 'active' : ''}`} onClick={() => setActiveTab('generator')}>
-            AI Generator & Chat
-          </button>
-          <button className={`tab-btn ${activeTab === 'repository' ? 'active' : ''}`} onClick={() => setActiveTab('repository')}>
-            Test Cases Repository ({testCases.length})
-          </button>
-          <button className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
-            QA Analytics & Coverage
-          </button>
-          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
-            History Dashboard
-          </button>
+        <div className="tabs-navigation" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <div className="tabs-navigation-buttons" style={{ display: 'flex', gap: '8px' }}>
+            <button className={`tab-btn ${activeTab === 'generator' ? 'active' : ''}`} onClick={() => setActiveTab('generator')}>
+              AI Generator & Chat
+            </button>
+            <button className={`tab-btn ${activeTab === 'repository' ? 'active' : ''}`} onClick={() => setActiveTab('repository')}>
+              Test Cases Repository ({testCases.length})
+            </button>
+            <button className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
+              QA Analytics & Coverage
+            </button>
+            <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+              History Dashboard
+            </button>
+          </div>
+
+          {/* User Profile Widget on Right-hand Header */}
+          {currentUser && (
+            <div className="header-user-widget">
+              <div className="header-user-info">
+                <div className="header-user-avatar">
+                  {(currentUser.name || 'U')[0].toUpperCase()}
+                </div>
+                <div className="header-user-details">
+                  <span className="header-user-name">{currentUser.name}</span>
+                  <span className="header-user-email">{currentUser.email}</span>
+                </div>
+              </div>
+              <button className="btn-logout-header" onClick={handleLogout}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Logout
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tab 1: AI Generator & Chat */}
