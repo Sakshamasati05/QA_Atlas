@@ -3462,6 +3462,25 @@ app.post('/api/jira/test-connection', async (req, res) => {
   }
 });
 
+function normalizeAdoOrgUrl(inputUrl) {
+  let url = inputUrl.trim().replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'dev.azure.com') {
+      const paths = parsed.pathname.split('/').filter(Boolean);
+      if (paths.length > 0) {
+        return `https://dev.azure.com/${paths[0]}`;
+      }
+    } else if (parsed.hostname.endsWith('.visualstudio.com')) {
+      return `https://${parsed.hostname}`;
+    }
+  } catch (_) {}
+  return url;
+}
+
 // POST Test ADO Connection
 app.post('/api/ado/test-connection', async (req, res) => {
   try {
@@ -3470,10 +3489,7 @@ app.post('/api/ado/test-connection', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Organization URL, Project, and PAT are required.' });
     }
 
-    orgUrl = orgUrl.trim().replace(/\/$/, '');
-    if (!/^https?:\/\//i.test(orgUrl)) {
-      orgUrl = `https://${orgUrl}`;
-    }
+    orgUrl = normalizeAdoOrgUrl(orgUrl);
 
     if (pat === 'mock' || project === 'mock') {
       return res.json({ success: true, message: 'Mock Sandbox ADO Connection Successful!' });
@@ -3516,10 +3532,7 @@ app.post('/api/ado/upload', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields for ADO upload.' });
     }
 
-    orgUrl = orgUrl.trim().replace(/\/$/, '');
-    if (!/^https?:\/\//i.test(orgUrl)) {
-      orgUrl = `https://${orgUrl}`;
-    }
+    orgUrl = normalizeAdoOrgUrl(orgUrl);
 
     if (pat === 'mock') {
       const mockResult = testCases.map((tc, index) => ({
