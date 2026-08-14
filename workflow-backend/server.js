@@ -3539,26 +3539,42 @@ function escapeXml(unsafe) {
 }
 
 function parseStepsToXml(stepsText, expectedResultText) {
-  const stepsLines = stepsText ? stepsText.split('\n').map(l => l.trim()).filter(Boolean) : [];
-  const expectedLines = expectedResultText ? expectedResultText.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const stepsLinesRaw = stepsText ? stepsText.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const expectedLinesRaw = expectedResultText ? expectedResultText.split('\n').map(l => l.trim()).filter(Boolean) : [];
   
-  let xml = `<steps id="0" last="${Math.max(1, stepsLines.length)}">`;
+  const steps = [];
+  for (const line of stepsLinesRaw) {
+    const clean = line.replace(/^([-\*\u2022]\s*|\d+[\.\-\s]*)/, '').trim();
+    if (clean) {
+      steps.push(clean);
+    }
+  }
+
+  const expected = [];
+  for (const line of expectedLinesRaw) {
+    const clean = line.replace(/^([-\*\u2022]\s*|\d+[\.\-\s]*)/, '').trim();
+    if (clean) {
+      expected.push(clean);
+    }
+  }
+
+  let xml = `<steps id="0" last="${Math.max(1, steps.length)}">`;
   
-  if (stepsLines.length === 0) {
+  if (steps.length === 0) {
     xml += `<step id="1" type="ActionStep">`;
     xml += `<parameterizedString isformatted="true">Execute test scenario</parameterizedString>`;
     xml += `<parameterizedString isformatted="true">${escapeXml(expectedResultText || 'Expected success')}</parameterizedString>`;
     xml += `<description/></step>`;
   } else {
-    for (let i = 0; i < stepsLines.length; i++) {
+    for (let i = 0; i < steps.length; i++) {
       const stepId = i + 1;
-      let cleanStep = stepsLines[i].replace(/^\d+[\.\-\s]*/, '').trim();
+      const cleanStep = steps[i];
       
       let cleanExpected = 'N/A';
-      if (expectedLines[i]) {
-        cleanExpected = expectedLines[i].replace(/^\d+[\.\-\s]*/, '').trim();
-      } else if (i === stepsLines.length - 1 && expectedResultText) {
-        cleanExpected = expectedResultText.replace(/^\d+[\.\-\s]*/, '').trim();
+      if (expected[i]) {
+        cleanExpected = expected[i];
+      } else if (i === steps.length - 1 && expectedResultText) {
+        cleanExpected = expectedResultText.replace(/^([-\*\u2022]\s*|\d+[\.\-\s]*)/, '').trim();
       }
       
       xml += `<step id="${stepId}" type="ActionStep">`;
