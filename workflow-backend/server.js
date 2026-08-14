@@ -3243,18 +3243,12 @@ async function createJiraIssue(cleanHost, authString, projectKey, issueTypeName,
 
   if (!response.ok) {
     let errData = {};
+    const rawText = await response.text();
+    console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Raw:`, rawText);
     try {
-      errData = await response.json();
-      console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, JSON.stringify(errData));
+      errData = JSON.parse(rawText);
     } catch (_) {
-      try {
-        const errText = await response.text();
-        console.warn(`[Jira API] Creation of "${issueTypeName}" failed (Status ${response.status}). Details:`, errText);
-        errData = { errorMessages: [errText || 'Failed to create issue'] };
-      } catch (e2) {
-        console.warn(`[Jira API] Creation of "${issueTypeName}" failed. Could not read error response:`, e2);
-        errData = { errorMessages: ['Failed to create issue'] };
-      }
+      errData = { errorMessages: [rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : 'Failed to create issue'] };
     }
     return errData;
   }
@@ -3453,12 +3447,12 @@ app.post('/api/jira/test-connection', async (req, res) => {
       return res.json({ success: true, displayName: userData.displayName, emailAddress: userData.emailAddress });
     } else {
       let errDetail = 'Invalid credentials';
+      const rawText = await response.text();
       try {
-        const errJson = await response.json();
+        const errJson = JSON.parse(rawText);
         errDetail = errJson.errorMessages?.join(', ') || errDetail;
       } catch (_) {
-        const errText = await response.text();
-        errDetail = errText || errDetail;
+        errDetail = rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : errDetail;
       }
       return res.status(response.status).json({ success: false, error: `Authentication failed (Status ${response.status}): ${errDetail}` });
     }
@@ -3499,12 +3493,12 @@ app.post('/api/ado/test-connection', async (req, res) => {
       return res.json({ success: true, projectName: projectData.name, message: `Connected to Project: ${projectData.name}` });
     } else {
       let errDetail = 'Invalid credentials or project key';
+      const rawText = await response.text();
       try {
-        const errJson = await response.json();
+        const errJson = JSON.parse(rawText);
         errDetail = errJson.message || errDetail;
       } catch (_) {
-        const errText = await response.text();
-        errDetail = errText || errDetail;
+        errDetail = rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : errDetail;
       }
       return res.status(response.status).json({ success: false, error: `Authentication failed (Status ${response.status}): ${errDetail}` });
     }
@@ -3584,11 +3578,12 @@ app.post('/api/ado/upload', async (req, res) => {
 
       if (!response.ok) {
         let errText = 'Failed to create work item';
+        const rawText = await response.text();
         try {
-          const errJson = await response.json();
+          const errJson = JSON.parse(rawText);
           errText = errJson.message || errText;
         } catch (_) {
-          errText = await response.text() || errText;
+          errText = rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : errText;
         }
         throw new Error(`ADO Creation failed: ${errText}`);
       }
