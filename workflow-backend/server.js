@@ -3524,6 +3524,55 @@ app.post('/api/ado/test-connection', async (req, res) => {
   }
 });
 
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
+function parseStepsToXml(stepsText, expectedResultText) {
+  const stepsLines = stepsText ? stepsText.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const expectedLines = expectedResultText ? expectedResultText.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  
+  let xml = `<steps id="0" last="${Math.max(1, stepsLines.length)}">`;
+  
+  if (stepsLines.length === 0) {
+    xml += `<step id="1" type="ActionStep">`;
+    xml += `<parameterizedString isformatted="true">Execute test scenario</parameterizedString>`;
+    xml += `<parameterizedString isformatted="true">${escapeXml(expectedResultText || 'Expected success')}</parameterizedString>`;
+    xml += `<description/></step>`;
+  } else {
+    for (let i = 0; i < stepsLines.length; i++) {
+      const stepId = i + 1;
+      let cleanStep = stepsLines[i].replace(/^\d+[\.\-\s]*/, '').trim();
+      
+      let cleanExpected = 'N/A';
+      if (expectedLines[i]) {
+        cleanExpected = expectedLines[i].replace(/^\d+[\.\-\s]*/, '').trim();
+      } else if (i === stepsLines.length - 1 && expectedResultText) {
+        cleanExpected = expectedResultText.replace(/^\d+[\.\-\s]*/, '').trim();
+      }
+      
+      xml += `<step id="${stepId}" type="ActionStep">`;
+      xml += `<parameterizedString isformatted="true">${escapeXml(cleanStep)}</parameterizedString>`;
+      xml += `<parameterizedString isformatted="true">${escapeXml(cleanExpected)}</parameterizedString>`;
+      xml += `<description/>`;
+      xml += `</step>`;
+    }
+  }
+  
+  xml += '</steps>';
+  return xml;
+}
+
 // POST Push Test Cases to ADO
 app.post('/api/ado/upload', async (req, res) => {
   try {
@@ -3547,17 +3596,8 @@ app.post('/api/ado/upload', async (req, res) => {
     const createdWorkItems = [];
 
     for (const tc of testCases) {
-      let descriptionHtml = `<div>`;
-      if (tc.preconditions) {
-        descriptionHtml += `<p><strong>Preconditions:</strong><br/>${tc.preconditions.replace(/\n/g, '<br/>')}</p>`;
-      }
-      if (tc.steps) {
-        descriptionHtml += `<p><strong>Steps:</strong><br/>${tc.steps.replace(/\n/g, '<br/>')}</p>`;
-      }
-      if (tc.expectedResult) {
-        descriptionHtml += `<p><strong>Expected Result:</strong><br/>${tc.expectedResult.replace(/\n/g, '<br/>')}</p>`;
-      }
-      descriptionHtml += `</div>`;
+      const xmlSteps = parseStepsToXml(tc.steps, tc.expectedResult);
+      const descriptionHtml = tc.preconditions ? `<div><p><strong>Preconditions:</strong><br/>${tc.preconditions.replace(/\n/g, '<br/>')}</p></div>` : '';
 
       const patchPayload = [
         {
@@ -3574,6 +3614,11 @@ app.post('/api/ado/upload', async (req, res) => {
           "op": "add",
           "path": "/fields/Microsoft.VSTS.Common.Priority",
           "value": tc.priority === 'High' ? 1 : tc.priority === 'Medium' ? 2 : 3
+        },
+        {
+          "op": "add",
+          "path": "/fields/Microsoft.VSTS.TCM.Steps",
+          "value": xmlSteps
         }
       ];
 
