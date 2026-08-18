@@ -2979,11 +2979,8 @@ _Reported via QAutopilot Execution Engine_`;
                       accept=".json,.csv"
                       onChange={handleFileImport}
                     />
-                    <button className="btn-secondary" onClick={() => importInputRef.current?.click()}>
-                      📥 Import (.JSON/.CSV)
-                    </button>
                     <button className="btn-secondary" onClick={() => setIsExportModalOpen(true)} style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
-                      📤 Exporters
+                      📤 Automation Exporters
                     </button>
                     <button className="btn-secondary" onClick={handleDownloadTestCasesExcel} style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                       🟢 Download Excel
@@ -3003,14 +3000,6 @@ _Reported via QAutopilot Execution Engine_`;
                       style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}
                     >
                       {isUploadingToAdo ? '🚀 Uploading...' : '🟢 Push to ADO'}
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      onClick={handleOptimizeSuite}
-                      disabled={isOptimizingSuite}
-                      style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--positive-color)', border: '1px solid rgba(16, 185, 129, 0.2)' }}
-                    >
-                      {isOptimizingSuite ? '⚡ Optimizing...' : '✨ Optimize Suite'}
                     </button>
                     <button className="btn-primary" onClick={startDryRun} style={{ background: 'var(--primary)', boxShadow: '0 4px 12px var(--primary-glow)' }}>
                       ▶️ Start Dry-Run
