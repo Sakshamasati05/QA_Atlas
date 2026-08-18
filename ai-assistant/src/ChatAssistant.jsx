@@ -2678,7 +2678,7 @@ _Reported via QAutopilot Execution Engine_`;
                     <option value="Default" style={{ color: '#000000', background: '#ffffff' }}>Default format</option>
                     <option value="LLY TU" style={{ color: '#000000', background: '#ffffff' }}>LLY TU</option>
                     <option value="LLY PBPA" style={{ color: '#000000', background: '#ffffff' }}>LLY PBPA</option>
-                    <option value="DEL" style={{ color: '#000000', background: '#ffffff' }}>DEL</option>
+                    <option value="DEL" style={{ color: '#000000', background: '#ffffff' }}>Dell</option>
                   </select>
                 </div>
 
@@ -2842,7 +2842,7 @@ _Reported via QAutopilot Execution Engine_`;
                     <option value="Default">Default format</option>
                     <option value="LLY TU">LLY TU</option>
                     <option value="LLY PBPA">LLY PBPA</option>
-                    <option value="DEL">DEL</option>
+                    <option value="DEL">Dell</option>
                   </select>
                 </div>
 
