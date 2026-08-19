@@ -2555,7 +2555,7 @@ _Reported via QAutopilot Execution Engine_`;
         <div className="auth-card">
           <div className="auth-header">
             <div className="auth-logo">Q</div>
-            <h2>QAutopilot Console</h2>
+            <h2>QAutomation</h2>
             <p>{authMode === 'login' ? 'Sign in to access your QA Test repository' : 'Create an account to manage your projects'}</p>
           </div>
           
@@ -2623,7 +2623,7 @@ _Reported via QAutopilot Execution Engine_`;
       <div className={`qautopilot-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">Q</div>
-          <span>QAutopilot Console</span>
+          <span>QAutomation</span>
         </div>
 
         {/* UPLOAD DOCUMENTS */}
@@ -2756,7 +2756,7 @@ _Reported via QAutopilot Execution Engine_`;
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
-          <span className="mobile-logo-text">QAutopilot Console</span>
+          <span className="mobile-logo-text">QAutomation</span>
         </div>
 
         {/* Navigation Tabs */}
