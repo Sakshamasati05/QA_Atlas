@@ -5,6 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
+const officeParser = require('officeparser');
 
 // Auto-Bootstrap Prisma Database & Client on Startup
 const { execSync } = require('child_process');
@@ -294,6 +295,13 @@ app.post('/api/upload', upload.array('files', 20), async (req, res) => {
       } else if (ext === '.docx') {
         const result = await mammoth.extractRawText({ path: file.path });
         text = result.value;
+      } else if (ext === '.pptx' || ext === '.ppt') {
+        try {
+          text = await officeParser.parseOfficeAsync(file.path);
+        } catch (err) {
+          console.error('OfficeParser failed for PPT:', err);
+          text = `[Error parsing PPT file: ${file.originalname}]`;
+        }
       } else if (['.txt', '.md', '.csv', '.json', '.js', '.ts', '.jsx', '.tsx', '.py', '.java'].includes(ext)) {
         text = fs.readFileSync(file.path, 'utf8');
       } else {
