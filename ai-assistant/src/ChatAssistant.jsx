@@ -76,6 +76,8 @@ export default function ChatAssistant() {
   const [userStory, setUserStory] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [format, setFormat] = useState('Default');
+  const [adoWorkItemId, setAdoWorkItemId] = useState('');
+  const [isPullingFromAdo, setIsPullingFromAdo] = useState(false);
 
   const getCustomField = (tc, fieldName) => {
     if (!tc || !tc.customFields) return '';
@@ -1929,6 +1931,45 @@ export default function ChatAssistant() {
     }
   };
 
+  const handlePullFromAdo = async () => {
+    if (!adoOrgUrl || !adoPat) {
+      alert('Please configure your Azure DevOps integration settings (Organization URL and Personal Access Token) in the Settings panel (gear icon) first!');
+      return;
+    }
+    if (!adoWorkItemId.trim()) {
+      alert('Please enter a valid Azure DevOps Work Item ID.');
+      return;
+    }
+    setIsPullingFromAdo(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/ado/work-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orgUrl: adoOrgUrl,
+          project: adoProject,
+          pat: adoPat,
+          workItemId: adoWorkItemId.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUserStory(`[ADO ID: ${adoWorkItemId.trim()}] ${data.title}\n\nDescription:\n${data.description}`);
+        setAcceptanceCriteria(data.acceptanceCriteria || '');
+        alert(`Successfully pulled work item #${adoWorkItemId} from Azure DevOps!`);
+      } else {
+        alert(`Azure DevOps pull failed: ${data.error || 'Unknown API error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to establish connection with Azure DevOps to pull the work item');
+    } finally {
+      setIsPullingFromAdo(false);
+    }
+  };
+
   const handlePushToAdo = async () => {
     if (!adoOrgUrl || !adoProject || !adoPat) {
       alert('Please configure your Azure DevOps integration credentials in the Settings panel (gear icon) first!');
@@ -2811,6 +2852,34 @@ _Reported via QAutopilot Execution Engine_`;
                       Active: {activeStory.id}
                     </span>
                   )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '16px', marginTop: '12px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)' }}>Fetch from ADO:</span>
+                  <input
+                    type="text"
+                    placeholder="Work Item ID (e.g. 1024)"
+                    value={adoWorkItemId}
+                    onChange={(e) => setAdoWorkItemId(e.target.value)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--bg-app)',
+                      color: 'var(--text-main)',
+                      fontSize: '12px',
+                      width: '150px',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    onClick={handlePullFromAdo}
+                    disabled={isPullingFromAdo}
+                    className="btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
+                  >
+                    {isPullingFromAdo ? 'Pulling...' : '📥 Pull Requirement'}
+                  </button>
                 </div>
 
                 <div className="form-group">

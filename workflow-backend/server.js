@@ -3677,6 +3677,86 @@ app.post('/api/ado/upload', async (req, res) => {
   }
 });
 
+function htmlToText(html) {
+  if (!html) return '';
+  let text = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<li>/gi, '\n- ')
+    .replace(/<\/li>/gi, '');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return text.split('\n').map(l => l.trimEnd()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+app.post('/api/ado/work-item', async (req, res) => {
+  try {
+    let { orgUrl, pat, workItemId } = req.body;
+    if (!orgUrl || !pat || !workItemId) {
+      return res.status(400).json({ success: false, error: 'Missing required fields (orgUrl, pat, workItemId).' });
+    }
+
+    orgUrl = normalizeAdoOrgUrl(orgUrl);
+
+    if (pat === 'mock') {
+      return res.json({
+        success: true,
+        title: `Verify transaction processing workflow under heavy checkout volume`,
+        description: htmlToText(`<p>Provide users with instant payment status notifications.<br/>Ensure order validation occurs instantly on submit.</p>`),
+        acceptanceCriteria: htmlToText(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
+      });
+    }
+
+    const authString = Buffer.from(`:${pat}`).toString('base64');
+    const url = `${orgUrl}/_apis/wit/workitems/${workItemId}?api-version=7.0`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      let errText = 'Failed to fetch work item';
+      const rawText = await response.text();
+      try {
+        const errJson = JSON.parse(rawText);
+        errText = errJson.message || errText;
+      } catch (_) {
+        errText = rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : errText;
+      }
+      throw new Error(`ADO Fetch failed: ${errText}`);
+    }
+
+    const resData = await response.json();
+    const fields = resData.fields || {};
+
+    const rawTitle = fields['System.Title'] || '';
+    const rawDescription = fields['System.Description'] || fields['System.InfoTip'] || '';
+    const rawAcceptanceCriteria = fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '';
+
+    return res.json({
+      success: true,
+      title: rawTitle,
+      description: htmlToText(rawDescription),
+      acceptanceCriteria: htmlToText(rawAcceptanceCriteria)
+    });
+  } catch (error) {
+    console.error('[ADO Fetch Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Backend server (SQL) running on http://localhost:${PORT}`);
