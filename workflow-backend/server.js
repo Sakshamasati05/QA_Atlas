@@ -3704,51 +3704,60 @@ app.post('/api/ado/work-item', async (req, res) => {
     }
 
     orgUrl = normalizeAdoOrgUrl(orgUrl);
+    const ids = Array.isArray(workItemId) ? workItemId : [workItemId];
 
     if (pat === 'mock') {
-      return res.json({
-        success: true,
-        title: `Verify transaction processing workflow under heavy checkout volume`,
-        description: htmlToText(`<p>Provide users with instant payment status notifications.<br/>Ensure order validation occurs instantly on submit.</p>`),
+      const mockResult = ids.map(id => ({
+        id,
+        title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
+        description: htmlToText(`<p>Provide users with instant payment status notifications for ID ${id}.<br/>Ensure order validation occurs instantly on submit.</p>`),
         acceptanceCriteria: htmlToText(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
-      });
+      }));
+      return res.json({ success: true, workItems: mockResult });
     }
 
     const authString = Buffer.from(`:${pat}`).toString('base64');
-    const url = `${orgUrl}/_apis/wit/workitems/${workItemId}?api-version=7.0`;
+    const fetchedItems = [];
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      let errText = 'Failed to fetch work item';
-      const rawText = await response.text();
+    // Fetch details for all IDs concurrently using Promise.all
+    await Promise.all(ids.map(async (id) => {
       try {
-        const errJson = JSON.parse(rawText);
-        errText = errJson.message || errText;
-      } catch (_) {
-        errText = rawText ? (rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText) : errText;
+        const url = `${orgUrl}/_apis/wit/workitems/${id}?api-version=7.0`;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${authString}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          const fields = resData.fields || {};
+          fetchedItems.push({
+            id,
+            title: fields['System.Title'] || '',
+            description: htmlToText(fields['System.Description'] || fields['System.InfoTip'] || ''),
+            acceptanceCriteria: htmlToText(fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+          });
+        } else {
+          console.error(`Failed to fetch work item ${id}: Status ${response.status}`);
+        }
+      } catch (err) {
+        console.error(`Error fetching work item ${id}:`, err.message);
       }
-      throw new Error(`ADO Fetch failed: ${errText}`);
+    }));
+
+    if (fetchedItems.length === 0) {
+      throw new Error('No valid work items could be fetched from Azure DevOps.');
     }
 
-    const resData = await response.json();
-    const fields = resData.fields || {};
-
-    const rawTitle = fields['System.Title'] || '';
-    const rawDescription = fields['System.Description'] || fields['System.InfoTip'] || '';
-    const rawAcceptanceCriteria = fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '';
+    // Sort items to match the request order
+    fetchedItems.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 
     return res.json({
       success: true,
-      title: rawTitle,
-      description: htmlToText(rawDescription),
-      acceptanceCriteria: htmlToText(rawAcceptanceCriteria)
+      workItems: fetchedItems
     });
   } catch (error) {
     console.error('[ADO Fetch Error]:', error);

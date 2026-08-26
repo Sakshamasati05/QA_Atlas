@@ -1937,11 +1937,18 @@ export default function ChatAssistant() {
       return;
     }
     if (!adoWorkItemId.trim()) {
-      alert('Please enter a valid Azure DevOps Work Item ID.');
+      alert('Please enter one or more valid Azure DevOps Work Item IDs (e.g. 1024, 1025).');
       return;
     }
     setIsPullingFromAdo(true);
     try {
+      const ids = adoWorkItemId.split(/[\s,;]+/).map(id => id.trim()).filter(Boolean);
+      if (ids.length === 0) {
+        alert('Please enter one or more valid Azure DevOps Work Item IDs.');
+        setIsPullingFromAdo(false);
+        return;
+      }
+
       const res = await fetch(`${BACKEND_URL}/ado/work-item`, {
         method: 'POST',
         headers: {
@@ -1951,20 +1958,35 @@ export default function ChatAssistant() {
           orgUrl: adoOrgUrl,
           project: adoProject,
           pat: adoPat,
-          workItemId: adoWorkItemId.trim()
+          workItemId: ids
         })
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        setUserStory(`[ADO ID: ${adoWorkItemId.trim()}] ${data.title}\n\nDescription:\n${data.description}`);
-        setAcceptanceCriteria(data.acceptanceCriteria || '');
-        alert(`Successfully pulled work item #${adoWorkItemId} from Azure DevOps!`);
+      if (res.ok && data.success && data.workItems) {
+        let storiesText = '';
+        let acsText = '';
+        data.workItems.forEach((item, idx) => {
+          storiesText += `[ADO ID: ${item.id}] ${item.title}\n\nDescription:\n${item.description}\n`;
+          if (idx < data.workItems.length - 1) {
+            storiesText += `\n========================================\n\n`;
+          }
+          
+          if (item.acceptanceCriteria) {
+            acsText += `[ADO ID: ${item.id}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            if (idx < data.workItems.length - 1) {
+              acsText += `\n----------------------------------------\n\n`;
+            }
+          }
+        });
+        setUserStory(storiesText.trim());
+        setAcceptanceCriteria(acsText.trim());
+        alert(`Successfully pulled ${data.workItems.length} work items from Azure DevOps in bulk!`);
       } else {
         alert(`Azure DevOps pull failed: ${data.error || 'Unknown API error'}`);
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to establish connection with Azure DevOps to pull the work item');
+      alert('Failed to establish connection with Azure DevOps to pull the work item(s)');
     } finally {
       setIsPullingFromAdo(false);
     }
