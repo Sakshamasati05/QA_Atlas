@@ -1870,12 +1870,12 @@ app.post('/api/user-stories', async (req, res) => {
       });
       // Save acceptance criteria if provided
       if (acceptanceCriteria) {
-        const criteriaLines = acceptanceCriteria.split('\n').filter(line => line.trim().length > 0);
+        const criteriaLines = parseAndGroupCriteria(acceptanceCriteria);
         for (const line of criteriaLines) {
           await prisma.acceptanceCriterion.create({
             data: {
               id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line.trim(),
+              content: line,
               userStoryId: storyId
             }
           });
@@ -2043,12 +2043,12 @@ app.post('/api/user-stories', async (req, res) => {
         }
       });
       if (acceptanceCriteria) {
-        const criteriaLines = acceptanceCriteria.split('\n').filter(line => line.trim().length > 0);
+        const criteriaLines = parseAndGroupCriteria(acceptanceCriteria);
         for (const line of criteriaLines) {
           await prisma.acceptanceCriterion.create({
             data: {
               id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line.trim(),
+              content: line,
               userStoryId: storyId
             }
           });
@@ -2510,12 +2510,12 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
       });
 
       if (acText) {
-        const acLines = acText.split('\n').filter(l => l.trim().length > 0);
+        const acLines = parseAndGroupCriteria(acText);
         for (const line of acLines) {
           await prisma.acceptanceCriterion.create({
             data: {
               id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line.trim(),
+              content: line,
               userStoryId: finalStoryId
             }
           });
@@ -2534,12 +2534,12 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
         }
       });
       if (acText) {
-        const acLines = acText.split('\n').filter(l => l.trim().length > 0);
+        const acLines = parseAndGroupCriteria(acText);
         for (const line of acLines) {
           await prisma.acceptanceCriterion.create({
             data: {
               id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line.trim(),
+              content: line,
               userStoryId: finalStoryId
             }
           });
@@ -3686,6 +3686,29 @@ app.post('/api/ado/upload', async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
+function parseAndGroupCriteria(text) {
+  if (!text) return [];
+  const criteriaLines = [];
+  let currentItem = '';
+  const bulletRegex = /^([-\*\•\d+\.]|ac\d+[:\.-]?)/i;
+
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of rawLines) {
+    if (bulletRegex.test(line) || line.toLowerCase().startsWith('ac')) {
+      if (currentItem) criteriaLines.push(currentItem);
+      currentItem = line;
+    } else {
+      if (currentItem) {
+        currentItem += ' ' + line;
+      } else {
+        currentItem = line;
+      }
+    }
+  }
+  if (currentItem) criteriaLines.push(currentItem);
+  return criteriaLines;
+}
 
 function htmlToText(html) {
   if (!html) return '';

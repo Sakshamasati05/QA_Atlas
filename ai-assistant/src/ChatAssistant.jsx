@@ -3947,11 +3947,27 @@ _Reported via QAutopilot Execution Engine_`;
                         if (totalAc === 0) return '0%';
                         let coveredCount = 0;
                         activeStory.acceptanceCriteria.forEach((ac, idx) => {
-                          const tag = `[AC${idx + 1}]`;
-                          const isCovered = testCases.some(tc => 
-                            (tc.preconditions && tc.preconditions.toLowerCase().includes(tag.toLowerCase())) ||
-                            (tc.title && tc.title.toLowerCase().includes(tag.toLowerCase()))
-                          );
+                          const idx1 = idx + 1;
+                          const tag1 = `[ac${idx1}]`;
+                          const tag2 = `[ac-${idx1}]`;
+                          const tag3 = `ac${idx1}`;
+                          const tag4 = `ac-${idx1}`;
+
+                          const isCovered = testCases.some(tc => {
+                            const titleLower = (tc.title || '').toLowerCase();
+                            const precLower = (tc.preconditions || '').toLowerCase();
+                            const descLower = (tc.description || '').toLowerCase();
+
+                            const matchesTag = (str) => {
+                              if (!str) return false;
+                              return str.includes(tag1) || 
+                                     str.includes(tag2) ||
+                                     new RegExp(`\\b${tag3}\\b`).test(str) ||
+                                     new RegExp(`\\b${tag4}\\b`).test(str);
+                            };
+
+                            return matchesTag(titleLower) || matchesTag(precLower) || matchesTag(descLower);
+                          });
                           if (isCovered) coveredCount++;
                         });
                         return `${Math.round((coveredCount / (totalAc || 1)) * 100)}%`;
@@ -4133,11 +4149,27 @@ _Reported via QAutopilot Execution Engine_`;
                       </thead>
                       <tbody>
                         {activeStory.acceptanceCriteria.map((ac, idx) => {
-                          const tag = `[AC${idx + 1}]`;
-                          const mappingCases = testCases.filter(tc => 
-                            (tc.preconditions && tc.preconditions.toLowerCase().includes(tag.toLowerCase())) ||
-                            (tc.title && tc.title.toLowerCase().includes(tag.toLowerCase()))
-                          );
+                          const idx1 = idx + 1;
+                          const tag1 = `[ac${idx1}]`;
+                          const tag2 = `[ac-${idx1}]`;
+                          const tag3 = `ac${idx1}`;
+                          const tag4 = `ac-${idx1}`;
+
+                          const mappingCases = testCases.filter(tc => {
+                            const titleLower = (tc.title || '').toLowerCase();
+                            const precLower = (tc.preconditions || '').toLowerCase();
+                            const descLower = (tc.description || '').toLowerCase();
+
+                            const matchesTag = (str) => {
+                              if (!str) return false;
+                              return str.includes(tag1) || 
+                                     str.includes(tag2) ||
+                                     new RegExp(`\\b${tag3}\\b`).test(str) ||
+                                     new RegExp(`\\b${tag4}\\b`).test(str);
+                            };
+
+                            return matchesTag(titleLower) || matchesTag(precLower) || matchesTag(descLower);
+                          });
                           const isCovered = mappingCases.length > 0;
                           return (
                             <tr key={ac.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
