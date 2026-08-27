@@ -3773,6 +3773,105 @@ app.post('/api/ado/work-item', async (req, res) => {
   }
 });
 
+function extractAcceptanceCriteria(description) {
+  if (!description) return '';
+  const lower = description.toLowerCase();
+  const markers = ["acceptance criteria:", "acceptance criteria", "acceptance criterion:", "acceptance criterion", "acs:", "ac:"];
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1) {
+      return description.substring(idx + marker.length).trim();
+    }
+  }
+  return '';
+}
+
+app.post('/api/jira/issue', async (req, res) => {
+  try {
+    let { jiraHost, jiraEmail, jiraToken, issueKey } = req.body;
+    if (!jiraHost || !jiraEmail || !jiraToken || !issueKey) {
+      return res.status(400).json({ success: false, error: 'Missing required fields (jiraHost, jiraEmail, jiraToken, issueKey).' });
+    }
+
+    if (!jiraHost.startsWith('http://') && !jiraHost.startsWith('https://')) {
+      jiraHost = `https://${jiraHost}`;
+    }
+
+    const keys = Array.isArray(issueKey) ? issueKey : [issueKey];
+
+    if (jiraToken === 'mock') {
+      const mockResult = keys.map(key => ({
+        key,
+        summary: `Verify user verification workflow for issue ${key}`,
+        description: `This is a mock description of Jira issue ${key}.\nIt covers transaction tracking.`,
+        acceptanceCriteria: `1. Verification link sent to email.\n2. Expiry duration is 24 hours.`
+      }));
+      return res.json({ success: true, issues: mockResult });
+    }
+
+    const authString = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+    const fetchedItems = [];
+
+    await Promise.all(keys.map(async (key) => {
+      try {
+        const url = `${jiraHost}/rest/api/2/issue/${encodeURIComponent(key)}`;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${authString}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          const fields = resData.fields || {};
+          const rawDescription = fields.description || '';
+          
+          let ac = extractAcceptanceCriteria(rawDescription);
+          let desc = rawDescription;
+          if (ac) {
+            const lowerDesc = rawDescription.toLowerCase();
+            const markers = ["acceptance criteria:", "acceptance criteria", "acceptance criterion:", "acceptance criterion", "acs:", "ac:"];
+            for (const marker of markers) {
+              const idx = lowerDesc.indexOf(marker);
+              if (idx !== -1) {
+                desc = rawDescription.substring(0, idx).trim();
+                break;
+              }
+            }
+          }
+
+          fetchedItems.push({
+            key,
+            summary: fields.summary || '',
+            description: desc,
+            acceptanceCriteria: ac
+          });
+        } else {
+          console.error(`Failed to fetch Jira issue ${key}: Status ${response.status}`);
+        }
+      } catch (err) {
+        console.error(`Error fetching Jira issue ${key}:`, err.message);
+      }
+    }));
+
+    if (fetchedItems.length === 0) {
+      throw new Error('No valid Jira issues could be fetched.');
+    }
+
+    fetchedItems.sort((a, b) => keys.indexOf(a.key) - keys.indexOf(b.key));
+
+    return res.json({
+      success: true,
+      issues: fetchedItems
+    });
+  } catch (error) {
+    console.error('[Jira Fetch Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 const PORT = 5000;
 app.listen(PORT, () => {

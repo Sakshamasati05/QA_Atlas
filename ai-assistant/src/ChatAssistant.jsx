@@ -78,6 +78,8 @@ export default function ChatAssistant() {
   const [format, setFormat] = useState('Default');
   const [adoWorkItemId, setAdoWorkItemId] = useState('');
   const [isPullingFromAdo, setIsPullingFromAdo] = useState(false);
+  const [jiraIssueKey, setJiraIssueKey] = useState('');
+  const [isPullingFromJira, setIsPullingFromJira] = useState(false);
 
   const getCustomField = (tc, fieldName) => {
     if (!tc || !tc.customFields) return '';
@@ -1992,6 +1994,67 @@ export default function ChatAssistant() {
     }
   };
 
+  const handlePullFromJira = async () => {
+    if (!jiraHost || !jiraEmail || !jiraToken) {
+      alert('Please configure your Jira integration settings (Host URL, Email and API Token) in the Settings panel (gear icon) first!');
+      return;
+    }
+    if (!jiraIssueKey.trim()) {
+      alert('Please enter one or more valid Jira Issue Keys (e.g. KAN-12, KAN-13).');
+      return;
+    }
+    setIsPullingFromJira(true);
+    try {
+      const keys = jiraIssueKey.split(/[\s,;]+/).map(k => k.trim()).filter(Boolean);
+      if (keys.length === 0) {
+        alert('Please enter one or more valid Jira Issue Keys.');
+        setIsPullingFromJira(false);
+        return;
+      }
+
+      const res = await fetch(`${BACKEND_URL}/jira/issue`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          jiraHost,
+          jiraEmail,
+          jiraToken,
+          issueKey: keys
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.issues) {
+        let storiesText = '';
+        let acsText = '';
+        data.issues.forEach((item, idx) => {
+          storiesText += `[Jira Key: ${item.key}] ${item.summary}\n\nDescription:\n${item.description}\n`;
+          if (idx < data.issues.length - 1) {
+            storiesText += `\n========================================\n\n`;
+          }
+          
+          if (item.acceptanceCriteria) {
+            acsText += `[Jira Key: ${item.key}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            if (idx < data.issues.length - 1) {
+              acsText += `\n----------------------------------------\n\n`;
+            }
+          }
+        });
+        setUserStory(storiesText.trim());
+        setAcceptanceCriteria(acsText.trim());
+        alert(`Successfully pulled ${data.issues.length} issues from Jira in bulk!`);
+      } else {
+        alert(`Jira pull failed: ${data.error || 'Unknown API error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to establish connection with Jira to pull the issue(s)');
+    } finally {
+      setIsPullingFromJira(false);
+    }
+  };
+
   const handlePushToAdo = async () => {
     if (!adoOrgUrl || !adoProject || !adoPat) {
       alert('Please configure your Azure DevOps integration credentials in the Settings panel (gear icon) first!');
@@ -2876,32 +2939,66 @@ _Reported via QAutopilot Execution Engine_`;
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '16px', marginTop: '12px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)' }}>Fetch from ADO:</span>
-                  <input
-                    type="text"
-                    placeholder="Work Item ID (e.g. 1024)"
-                    value={adoWorkItemId}
-                    onChange={(e) => setAdoWorkItemId(e.target.value)}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border-color)',
-                      background: 'var(--bg-app)',
-                      color: 'var(--text-main)',
-                      fontSize: '12px',
-                      width: '150px',
-                      outline: 'none'
-                    }}
-                  />
-                  <button
-                    onClick={handlePullFromAdo}
-                    disabled={isPullingFromAdo}
-                    className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
-                  >
-                    {isPullingFromAdo ? 'Pulling...' : '📥 Pull Requirement'}
-                  </button>
+                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '16px', marginTop: '12px' }}>
+                  {/* Fetch from ADO */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', flex: '1', minWidth: '280px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)' }}>Fetch from ADO:</span>
+                    <input
+                      type="text"
+                      placeholder="Work Item ID(s) (e.g. 1024, 1025)"
+                      value={adoWorkItemId}
+                      onChange={(e) => setAdoWorkItemId(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-app)',
+                        color: 'var(--text-main)',
+                        fontSize: '12px',
+                        flex: '1',
+                        minWidth: '100px',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      onClick={handlePullFromAdo}
+                      disabled={isPullingFromAdo}
+                      className="btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
+                    >
+                      {isPullingFromAdo ? 'Pulling...' : '📥 Pull ADO'}
+                    </button>
+                  </div>
+
+                  {/* Fetch from Jira */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', flex: '1', minWidth: '280px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)' }}>Fetch from Jira:</span>
+                    <input
+                      type="text"
+                      placeholder="Issue Key(s) (e.g. KAN-12, KAN-13)"
+                      value={jiraIssueKey}
+                      onChange={(e) => setJiraIssueKey(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-app)',
+                        color: 'var(--text-main)',
+                        fontSize: '12px',
+                        flex: '1',
+                        minWidth: '100px',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      onClick={handlePullFromJira}
+                      disabled={isPullingFromJira}
+                      className="btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
+                    >
+                      {isPullingFromJira ? 'Pulling...' : '📥 Pull Jira'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
