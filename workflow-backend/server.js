@@ -2038,7 +2038,8 @@ app.post('/api/user-stories', async (req, res) => {
         where: { id: storyId },
         data: {
           title: title,
-          description: userStory || ''
+          description: userStory || '',
+          createdAt: new Date().toISOString()
         }
       });
       if (acceptanceCriteria) {
