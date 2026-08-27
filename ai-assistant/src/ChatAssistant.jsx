@@ -80,6 +80,7 @@ export default function ChatAssistant() {
   const [isPullingFromAdo, setIsPullingFromAdo] = useState(false);
   const [jiraIssueKey, setJiraIssueKey] = useState('');
   const [isPullingFromJira, setIsPullingFromJira] = useState(false);
+  const [includeSubTasks, setIncludeSubTasks] = useState(false);
 
   const getCustomField = (tc, fieldName) => {
     if (!tc || !tc.customFields) return '';
@@ -1960,7 +1961,8 @@ export default function ChatAssistant() {
           orgUrl: adoOrgUrl,
           project: adoProject,
           pat: adoPat,
-          workItemId: ids
+          workItemId: ids,
+          includeSubTasks
         })
       });
       const data = await res.json();
@@ -2021,7 +2023,8 @@ export default function ChatAssistant() {
           jiraHost,
           jiraEmail,
           jiraToken,
-          issueKey: keys
+          issueKey: keys,
+          includeSubTasks
         })
       });
       const data = await res.json();
@@ -3002,6 +3005,19 @@ _Reported via QAutopilot Execution Engine_`;
                       {isPullingFromJira ? 'Pulling...' : '📥 Pull Jira'}
                     </button>
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', marginTop: '-4px', paddingLeft: '4px' }}>
+                  <input
+                    type="checkbox"
+                    id="includeSubTasks"
+                    checked={includeSubTasks}
+                    onChange={(e) => setIncludeSubTasks(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '14px', height: '14px' }}
+                  />
+                  <label htmlFor="includeSubTasks" style={{ fontSize: '12px', color: 'var(--text-sub)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
+                    Include child work items / sub-tasks
+                  </label>
                 </div>
 
                 <div className="form-group">

@@ -3708,7 +3708,7 @@ function htmlToText(html) {
 
 app.post('/api/ado/work-item', async (req, res) => {
   try {
-    let { orgUrl, pat, workItemId } = req.body;
+    let { orgUrl, pat, workItemId, includeSubTasks } = req.body;
     if (!orgUrl || !pat || !workItemId) {
       return res.status(400).json({ success: false, error: 'Missing required fields (orgUrl, pat, workItemId).' });
     }
@@ -3717,12 +3717,29 @@ app.post('/api/ado/work-item', async (req, res) => {
     const ids = Array.isArray(workItemId) ? workItemId : [workItemId];
 
     if (pat === 'mock') {
-      const mockResult = ids.map(id => ({
-        id,
-        title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
-        description: htmlToText(`<p>Provide users with instant payment status notifications for ID ${id}.<br/>Ensure order validation occurs instantly on submit.</p>`),
-        acceptanceCriteria: htmlToText(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
-      }));
+      const mockResult = [];
+      ids.forEach(id => {
+        mockResult.push({
+          id,
+          title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
+          description: htmlToText(`<p>Provide users with instant payment status notifications for ID ${id}.<br/>Ensure order validation occurs instantly on submit.</p>`),
+          acceptanceCriteria: htmlToText(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
+        });
+        if (includeSubTasks) {
+          mockResult.push({
+            id: `${id}-child-1`,
+            title: `(Sub-task of ${id}) Validation of transaction payment payload formatting`,
+            description: `Check payload signature matches transaction ID ${id} before invoking third-party payments provider gateway service.`,
+            acceptanceCriteria: `1. Field 'transactionId' must be present in payment header.`
+          });
+          mockResult.push({
+            id: `${id}-child-2`,
+            title: `(Sub-task of ${id}) Re-route to retry fallback queue on transaction errors`,
+            description: `Verify that failures on transaction gateway redirect the payment routing to failover checkout queues.`,
+            acceptanceCriteria: `1. Re-route triggered on gateway code 504 timeout.`
+          });
+        }
+      });
       return res.json({ success: true, workItems: mockResult });
     }
 
@@ -3732,7 +3749,7 @@ app.post('/api/ado/work-item', async (req, res) => {
     // Fetch details for all IDs concurrently using Promise.all
     await Promise.all(ids.map(async (id) => {
       try {
-        const url = `${orgUrl}/_apis/wit/workitems/${id}?api-version=7.0`;
+        const url = `${orgUrl}/_apis/wit/workitems/${id}?api-version=7.0${includeSubTasks ? '&$expand=relations' : ''}`;
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -3750,6 +3767,42 @@ app.post('/api/ado/work-item', async (req, res) => {
             description: htmlToText(fields['System.Description'] || fields['System.InfoTip'] || ''),
             acceptanceCriteria: htmlToText(fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
           });
+
+          // Fetch child items if includeSubTasks is enabled
+          if (includeSubTasks && resData.relations && resData.relations.length > 0) {
+            const childRelations = resData.relations.filter(rel => rel.rel === 'System.LinkTypes.Hierarchy-Forward');
+            const childIds = childRelations.map(rel => {
+              const urlStr = rel.url || '';
+              return urlStr.substring(urlStr.lastIndexOf('/') + 1);
+            }).filter(Boolean);
+
+            if (childIds.length > 0) {
+              await Promise.all(childIds.map(async (childId) => {
+                try {
+                  const childUrl = `${orgUrl}/_apis/wit/workitems/${childId}?api-version=7.0`;
+                  const childRes = await fetch(childUrl, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Basic ${authString}`,
+                      'Accept': 'application/json'
+                    }
+                  });
+                  if (childRes.ok) {
+                    const childData = await childRes.json();
+                    const childFields = childData.fields || {};
+                    fetchedItems.push({
+                      id: childId,
+                      title: `(Sub-task of ${id}) ${childFields['System.Title'] || ''}`,
+                      description: htmlToText(childFields['System.Description'] || childFields['System.InfoTip'] || ''),
+                      acceptanceCriteria: htmlToText(childFields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+                    });
+                  }
+                } catch (childErr) {
+                  console.error(`Error fetching child work item ${childId} of parent ${id}:`, childErr.message);
+                }
+              }));
+            }
+          }
         } else {
           console.error(`Failed to fetch work item ${id}: Status ${response.status}`);
         }
@@ -3762,8 +3815,14 @@ app.post('/api/ado/work-item', async (req, res) => {
       throw new Error('No valid work items could be fetched from Azure DevOps.');
     }
 
-    // Sort items to match the request order
-    fetchedItems.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    // Sort parent items to match the request order (child items append after parents)
+    fetchedItems.sort((a, b) => {
+      const aParent = ids.includes(a.id);
+      const bParent = ids.includes(b.id);
+      if (aParent && !bParent) return -1;
+      if (!aParent && bParent) return 1;
+      return 0;
+    });
 
     return res.json({
       success: true,
@@ -3790,7 +3849,7 @@ function extractAcceptanceCriteria(description) {
 
 app.post('/api/jira/issue', async (req, res) => {
   try {
-    let { jiraHost, jiraEmail, jiraToken, issueKey } = req.body;
+    let { jiraHost, jiraEmail, jiraToken, issueKey, includeSubTasks } = req.body;
     if (!jiraHost || !jiraEmail || !jiraToken || !issueKey) {
       return res.status(400).json({ success: false, error: 'Missing required fields (jiraHost, jiraEmail, jiraToken, issueKey).' });
     }
@@ -3802,12 +3861,29 @@ app.post('/api/jira/issue', async (req, res) => {
     const keys = Array.isArray(issueKey) ? issueKey : [issueKey];
 
     if (jiraToken === 'mock') {
-      const mockResult = keys.map(key => ({
-        key,
-        summary: `Verify user verification workflow for issue ${key}`,
-        description: `This is a mock description of Jira issue ${key}.\nIt covers transaction tracking.`,
-        acceptanceCriteria: `1. Verification link sent to email.\n2. Expiry duration is 24 hours.`
-      }));
+      const mockResult = [];
+      keys.forEach(key => {
+        mockResult.push({
+          key,
+          summary: `Verify user verification workflow for issue ${key}`,
+          description: `This is a mock description of Jira issue ${key}.\nIt covers transaction tracking.`,
+          acceptanceCriteria: `1. Verification link sent to email.\n2. Expiry duration is 24 hours.`
+        });
+        if (includeSubTasks) {
+          mockResult.push({
+            key: `${key}-sub-1`,
+            summary: `(Sub-task of ${key}) Email template validation for verification flow`,
+            description: `Verify email markup formatting and dynamic variable parsing for ${key} verify link.`,
+            acceptanceCriteria: `1. Email subject must be 'Verify your email address'.`
+          });
+          mockResult.push({
+            key: `${key}-sub-2`,
+            summary: `(Sub-task of ${key}) Security token expiry validation checks`,
+            description: `Check token database storage validation constraints and verify tokens expire after 24 hours.`,
+            acceptanceCriteria: `1. Expired tokens must reject authorization attempts.`
+          });
+        }
+      });
       return res.json({ success: true, issues: mockResult });
     }
 
@@ -3850,6 +3926,51 @@ app.post('/api/jira/issue', async (req, res) => {
             description: desc,
             acceptanceCriteria: ac
           });
+
+          // Fetch child subtasks if includeSubTasks is enabled
+          if (includeSubTasks && fields.subtasks && fields.subtasks.length > 0) {
+            await Promise.all(fields.subtasks.map(async (sub) => {
+              try {
+                const subKey = sub.key;
+                const subUrl = `${jiraHost}/rest/api/2/issue/${encodeURIComponent(subKey)}`;
+                const subRes = await fetch(subUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Basic ${authString}`,
+                    'Accept': 'application/json'
+                  }
+                });
+
+                if (subRes.ok) {
+                  const subData = await subRes.json();
+                  const subFields = subData.fields || {};
+                  const subRawDesc = subFields.description || '';
+                  let subAc = extractAcceptanceCriteria(subRawDesc);
+                  let subDesc = subRawDesc;
+                  if (subAc) {
+                    const lowerSubDesc = subRawDesc.toLowerCase();
+                    const markers = ["acceptance criteria:", "acceptance criteria", "acceptance criterion:", "acceptance criterion", "acs:", "ac:"];
+                    for (const marker of markers) {
+                      const idx = lowerSubDesc.indexOf(marker);
+                      if (idx !== -1) {
+                        subDesc = subRawDesc.substring(0, idx).trim();
+                        break;
+                      }
+                    }
+                  }
+
+                  fetchedItems.push({
+                    key: subKey,
+                    summary: `(Sub-task of ${key}) ${subFields.summary || ''}`,
+                    description: subDesc,
+                    acceptanceCriteria: subAc
+                  });
+                }
+              } catch (subErr) {
+                console.error(`Error fetching sub-task ${sub.key} of parent ${key}:`, subErr.message);
+              }
+            }));
+          }
         } else {
           console.error(`Failed to fetch Jira issue ${key}: Status ${response.status}`);
         }
@@ -3862,7 +3983,14 @@ app.post('/api/jira/issue', async (req, res) => {
       throw new Error('No valid Jira issues could be fetched.');
     }
 
-    fetchedItems.sort((a, b) => keys.indexOf(a.key) - keys.indexOf(b.key));
+    // Sort parent keys to match the request order (sub-tasks append after parents)
+    fetchedItems.sort((a, b) => {
+      const aParent = keys.includes(a.key);
+      const bParent = keys.includes(b.key);
+      if (aParent && !bParent) return -1;
+      if (!aParent && bParent) return 1;
+      return 0;
+    });
 
     return res.json({
       success: true,
