@@ -2037,6 +2037,7 @@ app.post('/api/user-stories', async (req, res) => {
       await prisma.userStory.update({
         where: { id: storyId },
         data: {
+          title: title,
           description: userStory || ''
         }
       });

@@ -2897,7 +2897,10 @@ _Reported via QAutopilot Execution Engine_`;
             <button className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
               QA Analytics & Coverage
             </button>
-            <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+            <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => {
+              setActiveTab('history');
+              fetchPastStories();
+            }}>
               History Dashboard
             </button>
           </div>
