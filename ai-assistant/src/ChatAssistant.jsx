@@ -1757,11 +1757,13 @@ export default function ChatAssistant() {
           'x-provider': provider,
           'x-api-key': activeKey
         },
-        body: JSON.stringify({ storyId: activeStory.id, acContent })
+        body: JSON.stringify({ storyId: activeStory.id, acContent, acIndex: index })
       });
       const data = await res.json();
-      if (data.success && data.testCases) {
+      if (res.ok && data.success && data.testCases) {
         setTestCases(prev => [...prev, ...data.testCases]);
+      } else {
+        alert(data.error || 'Failed to generate targeted test case');
       }
     } catch (err) {
       console.error(err);

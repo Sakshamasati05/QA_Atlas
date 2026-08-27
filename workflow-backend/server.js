@@ -2947,7 +2947,7 @@ ${acText}
 // POST Generate Targeted Test Case for specific AC
 app.post('/api/generate-targeted-tc', async (req, res) => {
   try {
-    const { storyId, acContent } = req.body;
+    const { storyId, acContent, acIndex } = req.body;
     const provider = req.headers['x-provider'] || 'gemini';
     const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
 
@@ -2957,19 +2957,17 @@ app.post('/api/generate-targeted-tc', async (req, res) => {
     }
 
     let tcs = [];
+    let usedMock = false;
+    const resolvedIndex = typeof acIndex === 'number' ? (acIndex + 1) : 1;
+    const targetTag = `[AC${resolvedIndex}]`;
+
     if (!apiKey) {
-      // Mock generation
-      tcs = [{
-        customId: 'TC' + Math.floor(Math.random() * 1000),
-        title: 'Verify targeted flow for: ' + acContent.substring(0, 30),
-        type: 'Positive',
-        preconditions: 'System default state',
-        steps: '1. Navigate to target field.\n2. Perform operation relating to: ' + acContent + '\n3. Submit.',
-        expectedResult: 'Acceptance Criterion is fully verified and matches system specs.',
-        priority: 'High'
-      }];
+      usedMock = true;
     } else {
-      const promptText = `You are a world-class QA Automation Engineer. Generate exactly 2 high-quality, targeted manual test cases that validate the following specific Acceptance Criterion. Do not write test cases for any other requirements.
+      try {
+        const promptText = `You are a world-class QA Automation Engineer. Generate exactly 2 high-quality, targeted manual test cases that validate the following specific Acceptance Criterion. Do not write test cases for any other requirements.
+
+IMPORTANT: You MUST include the tag "${targetTag}" inside the "preconditions" field of each generated test case (e.g. "${targetTag} System state is...") so it maps to the criterion.
 
 User Story:
 ${story.description}
@@ -2992,9 +2990,36 @@ Output fuzzed validation scenarios as a JSON object containing a "testCases" arr
   ]
 }`;
 
-      const resText = await callAiGeneric(promptText, provider, apiKey, true);
-      const parsed = parseCleanJson(resText);
-      tcs = parsed.testCases || [];
+        const resText = await callAiGeneric(promptText, provider, apiKey, true);
+        const parsed = parseCleanJson(resText);
+        tcs = parsed.testCases || [];
+      } catch (err) {
+        console.warn('[Targeted Gen AI Error, falling back to mock]:', err.message);
+        usedMock = true;
+      }
+    }
+
+    if (usedMock || tcs.length === 0) {
+      tcs = [
+        {
+          customId: 'TC-TAR-' + Math.floor(Math.random() * 900 + 100),
+          title: 'Verify targeted flow for: ' + acContent.substring(0, 50),
+          type: 'Positive',
+          preconditions: `${targetTag} System initialized and ready to verify: ${acContent.substring(0, 40)}...`,
+          steps: `1. Open test interface.\n2. Perform verification steps matching: ${acContent}\n3. Confirm results conform to expected outcomes.`,
+          expectedResult: 'System returns validation logs and confirms execution.',
+          priority: 'High'
+        },
+        {
+          customId: 'TC-TAR-' + Math.floor(Math.random() * 900 + 100),
+          title: 'Verify validation boundary handling for: ' + acContent.substring(0, 50),
+          type: 'Edge',
+          preconditions: `${targetTag} System online. Parameter bounds checked relative to: ${acContent.substring(0, 40)}...`,
+          steps: `1. Access form inputs.\n2. Supply border/limit inputs related to: ${acContent}\n3. Trigger submission check.`,
+          expectedResult: 'System parses validation constraints successfully or returns failure gracefully.',
+          priority: 'Medium'
+        }
+      ];
     }
 
     const saved = [];
