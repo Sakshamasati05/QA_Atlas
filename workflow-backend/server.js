@@ -3391,8 +3391,24 @@ app.post('/api/jira/upload', async (req, res) => {
       // 2. Create Test cases and link them to Test Plan, and create a Test Execution for EACH Test Case
       const createdIssues = [];
       for (const tc of testCases) {
+        let customFieldsText = '';
+        if (tc.customFields) {
+          try {
+            const fieldsObj = typeof tc.customFields === 'string' ? JSON.parse(tc.customFields) : tc.customFields;
+            if (Object.keys(fieldsObj).length > 0) {
+              customFieldsText += '\n\nCustom Metadata:\n';
+              for (const [key, val] of Object.entries(fieldsObj)) {
+                if (val && val !== 'N/A') {
+                  const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                  customFieldsText += `- ${displayName}: ${val}\n`;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
         const tSummary = `[${tc.customId || 'TC'}] ${tc.title}`;
-        const tDesc = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
+        const tDesc = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}${customFieldsText}`;
         const tData = await createJiraIssue(cleanHost, authString, cleanProjectKey, testType, tSummary, tDesc);
         
         if (tData.key) {
@@ -3425,8 +3441,24 @@ app.post('/api/jira/upload', async (req, res) => {
 
     const createdIssues = [];
     for (const tc of testCases) {
+      let customFieldsText = '';
+      if (tc.customFields) {
+        try {
+          const fieldsObj = typeof tc.customFields === 'string' ? JSON.parse(tc.customFields) : tc.customFields;
+          if (Object.keys(fieldsObj).length > 0) {
+            customFieldsText += '\n\nCustom Metadata:\n';
+            for (const [key, val] of Object.entries(fieldsObj)) {
+              if (val && val !== 'N/A') {
+                const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                customFieldsText += `- ${displayName}: ${val}\n`;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       const summary = `[${tc.customId || 'TC'}] ${tc.title}`;
-      const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}`;
+      const descText = `Preconditions:\n${tc.preconditions || 'None'}\n\nSteps:\n${tc.steps || ''}\n\nExpected Result:\n${tc.expectedResult || ''}${customFieldsText}`;
       
       const tData = await createJiraIssue(
         cleanHost, 
@@ -3648,7 +3680,25 @@ app.post('/api/ado/upload', async (req, res) => {
 
     for (const tc of testCases) {
       const xmlSteps = parseStepsToXml(tc.steps, tc.expectedResult);
-      const descriptionHtml = tc.preconditions ? `<div><p><strong>Preconditions:</strong><br/>${tc.preconditions.replace(/\n/g, '<br/>')}</p></div>` : '';
+      
+      let customFieldsHtml = '';
+      if (tc.customFields) {
+        try {
+          const fieldsObj = typeof tc.customFields === 'string' ? JSON.parse(tc.customFields) : tc.customFields;
+          if (Object.keys(fieldsObj).length > 0) {
+            customFieldsHtml += '<hr/><h4><strong>Custom Metadata:</strong></h4><ul>';
+            for (const [key, val] of Object.entries(fieldsObj)) {
+              if (val && val !== 'N/A') {
+                const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                customFieldsHtml += `<li><strong>${displayName}:</strong> ${val}</li>`;
+              }
+            }
+            customFieldsHtml += '</ul>';
+          }
+        } catch (_) {}
+      }
+
+      const descriptionHtml = `<div><p><strong>Preconditions:</strong><br/>${(tc.preconditions || 'N/A').replace(/\n/g, '<br/>')}</p>${customFieldsHtml}</div>`;
 
       const patchPayload = [
         {
