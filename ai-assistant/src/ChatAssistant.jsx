@@ -1987,13 +1987,13 @@ export default function ChatAssistant() {
         let storiesText = '';
         let acsText = '';
         data.workItems.forEach((item, idx) => {
-          storiesText += `[ADO ID: ${item.id}] ${item.title}\n\nDescription:\n${item.description}\n`;
+          storiesText += `${item.id}. ${item.title}\n\nDescription:\n${item.description}\n`;
           if (idx < data.workItems.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
-            acsText += `[ADO ID: ${item.id}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            acsText += `${item.id}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
             if (idx < data.workItems.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
@@ -2049,13 +2049,13 @@ export default function ChatAssistant() {
         let storiesText = '';
         let acsText = '';
         data.issues.forEach((item, idx) => {
-          storiesText += `[Jira Key: ${item.key}] ${item.summary}\n\nDescription:\n${item.description}\n`;
+          storiesText += `${item.key}. ${item.summary}\n\nDescription:\n${item.description}\n`;
           if (idx < data.issues.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
-            acsText += `[Jira Key: ${item.key}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            acsText += `${item.key}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
             if (idx < data.issues.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
@@ -2113,13 +2113,13 @@ export default function ChatAssistant() {
         let storiesText = '';
         let acsText = '';
         data.workItems.forEach((item, idx) => {
-          storiesText += `[ALM Req ID: ${item.id}] ${item.title}\n\nDescription:\n${item.description}\n`;
+          storiesText += `${item.id}. ${item.title}\n\nDescription:\n${item.description}\n`;
           if (idx < data.workItems.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
-            acsText += `[ALM Req ID: ${item.id}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            acsText += `${item.id}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
             if (idx < data.workItems.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
