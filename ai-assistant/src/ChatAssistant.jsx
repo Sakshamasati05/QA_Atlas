@@ -1986,15 +1986,41 @@ export default function ChatAssistant() {
       if (res.ok && data.success && data.workItems) {
         let storiesText = '';
         let acsText = '';
-        data.workItems.forEach((item, idx) => {
+
+        const parents = data.workItems.filter(item => {
+          const idStr = String(item.id);
+          return !idStr.includes('-') && !idStr.includes('child');
+        });
+        const children = data.workItems.filter(item => {
+          const idStr = String(item.id);
+          return idStr.includes('-') || idStr.includes('child');
+        });
+
+        parents.sort((a, b) => Number(a.id) - Number(b.id));
+
+        const sortedItems = [];
+        parents.forEach(p => {
+          sortedItems.push(p);
+          const pChildren = children.filter(c => String(c.id).startsWith(String(p.id)));
+          sortedItems.push(...pChildren);
+        });
+
+        const addedIds = new Set(sortedItems.map(x => x.id));
+        data.workItems.forEach(item => {
+          if (!addedIds.has(item.id)) {
+            sortedItems.push(item);
+          }
+        });
+
+        sortedItems.forEach((item, idx) => {
           storiesText += `${item.id}. ${item.title}\n\nDescription:\n${item.description}\n`;
-          if (idx < data.workItems.length - 1) {
+          if (idx < sortedItems.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
             acsText += `${item.id}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
-            if (idx < data.workItems.length - 1) {
+            if (idx < sortedItems.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
           }
@@ -2048,15 +2074,52 @@ export default function ChatAssistant() {
       if (res.ok && data.success && data.issues) {
         let storiesText = '';
         let acsText = '';
-        data.issues.forEach((item, idx) => {
+
+        const getJiraNumericVal = (keyStr) => {
+          if (!keyStr) return 0;
+          const parts = keyStr.split('-');
+          const last = parts[parts.length - 1];
+          const val = parseInt(last, 10);
+          return isNaN(val) ? 0 : val;
+        };
+
+        const parents = data.issues.filter(item => {
+          const sum = String(item.summary || '');
+          return !sum.startsWith('(Sub-task of');
+        });
+        const children = data.issues.filter(item => {
+          const sum = String(item.summary || '');
+          return sum.startsWith('(Sub-task of');
+        });
+
+        parents.sort((a, b) => getJiraNumericVal(a.key) - getJiraNumericVal(b.key));
+
+        const sortedIssues = [];
+        parents.forEach(p => {
+          sortedIssues.push(p);
+          const pChildren = children.filter(c => {
+            const match = String(c.summary).match(/\(Sub-task of ([A-Za-z0-9_-]+)\)/);
+            return match && match[1] === p.key;
+          });
+          sortedIssues.push(...pChildren);
+        });
+
+        const addedKeys = new Set(sortedIssues.map(x => x.key));
+        data.issues.forEach(item => {
+          if (!addedKeys.has(item.key)) {
+            sortedIssues.push(item);
+          }
+        });
+
+        sortedIssues.forEach((item, idx) => {
           storiesText += `${item.key}. ${item.summary}\n\nDescription:\n${item.description}\n`;
-          if (idx < data.issues.length - 1) {
+          if (idx < sortedIssues.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
             acsText += `${item.key}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
-            if (idx < data.issues.length - 1) {
+            if (idx < sortedIssues.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
           }
@@ -2112,15 +2175,41 @@ export default function ChatAssistant() {
       if (res.ok && data.success && data.workItems) {
         let storiesText = '';
         let acsText = '';
-        data.workItems.forEach((item, idx) => {
+
+        const parents = data.workItems.filter(item => {
+          const idStr = String(item.id);
+          return !idStr.includes('-') && !idStr.includes('sub');
+        });
+        const children = data.workItems.filter(item => {
+          const idStr = String(item.id);
+          return idStr.includes('-') || idStr.includes('sub');
+        });
+
+        parents.sort((a, b) => Number(a.id) - Number(b.id));
+
+        const sortedItems = [];
+        parents.forEach(p => {
+          sortedItems.push(p);
+          const pChildren = children.filter(c => String(c.id).startsWith(String(p.id)));
+          sortedItems.push(...pChildren);
+        });
+
+        const addedIds = new Set(sortedItems.map(x => x.id));
+        data.workItems.forEach(item => {
+          if (!addedIds.has(item.id)) {
+            sortedItems.push(item);
+          }
+        });
+
+        sortedItems.forEach((item, idx) => {
           storiesText += `${item.id}. ${item.title}\n\nDescription:\n${item.description}\n`;
-          if (idx < data.workItems.length - 1) {
+          if (idx < sortedItems.length - 1) {
             storiesText += `\n========================================\n\n`;
           }
           
           if (item.acceptanceCriteria) {
             acsText += `${item.id}. Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
-            if (idx < data.workItems.length - 1) {
+            if (idx < sortedItems.length - 1) {
               acsText += `\n----------------------------------------\n\n`;
             }
           }
