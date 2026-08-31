@@ -63,6 +63,19 @@ export default function ChatAssistant() {
   const [isTestingAdoConnection, setIsTestingAdoConnection] = useState(false);
   const [adoConnectionStatus, setAdoConnectionStatus] = useState(null);
   const [isUploadingToAdo, setIsUploadingToAdo] = useState(false);
+
+  // ALM Connection states
+  const [almUrl, setAlmUrl] = useState(() => localStorage.getItem('qatlas_almUrl') || '');
+  const [almDomain, setAlmDomain] = useState(() => localStorage.getItem('qatlas_almDomain') || '');
+  const [almProject, setAlmProject] = useState(() => localStorage.getItem('qatlas_almProject') || '');
+  const [almUsername, setAlmUsername] = useState(() => localStorage.getItem('qatlas_almUsername') || '');
+  const [almPassword, setAlmPassword] = useState(() => localStorage.getItem('qatlas_almPassword') || '');
+  const [tempAlmUrl, setTempAlmUrl] = useState('');
+  const [tempAlmDomain, setTempAlmDomain] = useState('');
+  const [tempAlmProject, setTempAlmProject] = useState('');
+  const [tempAlmUsername, setTempAlmUsername] = useState('');
+  const [tempAlmPassword, setTempAlmPassword] = useState('');
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUserId, setTempUserId] = useState(userId);
   const [tempProvider, setTempProvider] = useState(provider);
@@ -80,6 +93,8 @@ export default function ChatAssistant() {
   const [isPullingFromAdo, setIsPullingFromAdo] = useState(false);
   const [jiraIssueKey, setJiraIssueKey] = useState('');
   const [isPullingFromJira, setIsPullingFromJira] = useState(false);
+  const [almReqId, setAlmReqId] = useState('');
+  const [isPullingFromAlm, setIsPullingFromAlm] = useState(false);
   const [includeSubTasks, setIncludeSubTasks] = useState(false);
 
   const getCustomField = (tc, fieldName) => {
@@ -2060,6 +2075,70 @@ export default function ChatAssistant() {
     }
   };
 
+  const handlePullFromAlm = async () => {
+    if (!almUrl || !almDomain || !almProject || !almUsername || !almPassword) {
+      alert('Please configure your HP ALM integration credentials (URL, Domain, Project, Username, Password) in the Settings panel (gear icon) first!');
+      return;
+    }
+    if (!almReqId.trim()) {
+      alert('Please enter one or more valid ALM Requirement IDs (e.g. 101, 102).');
+      return;
+    }
+    setIsPullingFromAlm(true);
+    try {
+      const ids = almReqId.split(/[\s,;]+/).map(id => id.trim()).filter(Boolean);
+      if (ids.length === 0) {
+        alert('Please enter one or more valid ALM Requirement IDs.');
+        setIsPullingFromAlm(false);
+        return;
+      }
+
+      const res = await fetch(`${BACKEND_URL}/alm/work-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          almUrl,
+          almDomain,
+          almProject,
+          almUsername,
+          almPassword,
+          reqId: ids,
+          includeSubTasks
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.workItems) {
+        let storiesText = '';
+        let acsText = '';
+        data.workItems.forEach((item, idx) => {
+          storiesText += `[ALM Req ID: ${item.id}] ${item.title}\n\nDescription:\n${item.description}\n`;
+          if (idx < data.workItems.length - 1) {
+            storiesText += `\n========================================\n\n`;
+          }
+          
+          if (item.acceptanceCriteria) {
+            acsText += `[ALM Req ID: ${item.id}] Acceptance Criteria:\n${item.acceptanceCriteria}\n`;
+            if (idx < data.workItems.length - 1) {
+              acsText += `\n----------------------------------------\n\n`;
+            }
+          }
+        });
+        setUserStory(storiesText.trim());
+        setAcceptanceCriteria(acsText.trim());
+        alert(`Successfully pulled ${data.workItems.length} requirements from HP ALM in bulk!`);
+      } else {
+        alert(`HP ALM pull failed: ${data.error || 'Unknown API error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to establish connection with HP ALM to pull the requirement(s)');
+    } finally {
+      setIsPullingFromAlm(false);
+    }
+  };
+
   const handlePushToAdo = async () => {
     if (!adoOrgUrl || !adoProject || !adoPat) {
       alert('Please configure your Azure DevOps integration credentials in the Settings panel (gear icon) first!');
@@ -2447,6 +2526,11 @@ _Reported via QAutopilot Execution Engine_`;
     const trimmedAdoOrgUrl = (tempAdoOrgUrl || '').trim();
     const trimmedAdoProject = (tempAdoProject || '').trim();
     const trimmedAdoPat = (tempAdoPat || '').trim();
+    const trimmedAlmUrl = (tempAlmUrl || '').trim();
+    const trimmedAlmDomain = (tempAlmDomain || '').trim();
+    const trimmedAlmProject = (tempAlmProject || '').trim();
+    const trimmedAlmUsername = (tempAlmUsername || '').trim();
+    const trimmedAlmPassword = (tempAlmPassword || '').trim();
 
     setUserId(tempUserId);
     setProvider(tempProvider);
@@ -2461,6 +2545,11 @@ _Reported via QAutopilot Execution Engine_`;
     setAdoOrgUrl(trimmedAdoOrgUrl);
     setAdoProject(trimmedAdoProject);
     setAdoPat(trimmedAdoPat);
+    setAlmUrl(trimmedAlmUrl);
+    setAlmDomain(trimmedAlmDomain);
+    setAlmProject(trimmedAlmProject);
+    setAlmUsername(trimmedAlmUsername);
+    setAlmPassword(trimmedAlmPassword);
 
     localStorage.setItem('qatlas_userId', tempUserId);
     localStorage.setItem('qatlas_provider', tempProvider);
@@ -2475,6 +2564,11 @@ _Reported via QAutopilot Execution Engine_`;
     localStorage.setItem('qatlas_adoOrgUrl', trimmedAdoOrgUrl);
     localStorage.setItem('qatlas_adoProject', trimmedAdoProject);
     localStorage.setItem('qatlas_adoPat', trimmedAdoPat);
+    localStorage.setItem('qatlas_almUrl', trimmedAlmUrl);
+    localStorage.setItem('qatlas_almDomain', trimmedAlmDomain);
+    localStorage.setItem('qatlas_almProject', trimmedAlmProject);
+    localStorage.setItem('qatlas_almUsername', trimmedAlmUsername);
+    localStorage.setItem('qatlas_almPassword', trimmedAlmPassword);
     setIsSettingsOpen(false);
     createNewChat(); // Reset environment for new user segregation
   };
@@ -2866,6 +2960,11 @@ _Reported via QAutopilot Execution Engine_`;
             setTempAdoProject(adoProject);
             setTempAdoPat(adoPat);
             setAdoConnectionStatus(null);
+            setTempAlmUrl(almUrl);
+            setTempAlmDomain(almDomain);
+            setTempAlmProject(almProject);
+            setTempAlmUsername(almUsername);
+            setTempAlmPassword(almPassword);
             setIsSettingsOpen(true);
           }} style={{ flexGrow: 1 }}>
             ⚙️ Settings ({userId})
@@ -3005,6 +3104,36 @@ _Reported via QAutopilot Execution Engine_`;
                       style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
                     >
                       {isPullingFromJira ? 'Pulling...' : '📥 Pull Jira'}
+                    </button>
+                  </div>
+
+                  {/* Fetch from ALM */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '8px', flex: '1', minWidth: '280px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)' }}>Fetch from ALM:</span>
+                    <input
+                      type="text"
+                      placeholder="Req ID(s) (e.g. 101, 102)"
+                      value={almReqId}
+                      onChange={(e) => setAlmReqId(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-app)',
+                        color: 'var(--text-main)',
+                        fontSize: '12px',
+                        flex: '1',
+                        minWidth: '100px',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      onClick={handlePullFromAlm}
+                      disabled={isPullingFromAlm}
+                      className="btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', minHeight: 'auto', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)', border: '1px solid rgba(79, 70, 229, 0.2)' }}
+                    >
+                      {isPullingFromAlm ? 'Pulling...' : '📥 Pull ALM'}
                     </button>
                   </div>
                 </div>
@@ -4447,6 +4576,60 @@ _Reported via QAutopilot Execution Engine_`;
                     {adoConnectionStatus.success ? '✅ ' : '❌ '} {adoConnectionStatus.message}
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontFamily: 'Outfit, sans-serif' }}>🔌 HP ALM Integration</h4>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ALM Server URL</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAlmUrl}
+                  onChange={(e) => setTempAlmUrl(e.target.value)}
+                  placeholder="e.g. https://alm.example.com/qcbin"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ALM Domain</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAlmDomain}
+                  onChange={(e) => setTempAlmDomain(e.target.value)}
+                  placeholder="e.g. DEFAULT"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ALM Project Name</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAlmProject}
+                  onChange={(e) => setTempAlmProject(e.target.value)}
+                  placeholder="e.g. MyProject"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ALM Username</label>
+                <input
+                  type="text"
+                  className="sidebar-input"
+                  value={tempAlmUsername}
+                  onChange={(e) => setTempAlmUsername(e.target.value)}
+                  placeholder="Enter ALM Username..."
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label>ALM Password / Secret Key</label>
+                <input
+                  type="password"
+                  className="sidebar-input"
+                  value={tempAlmPassword}
+                  onChange={(e) => setTempAlmPassword(e.target.value)}
+                  placeholder={almPassword ? "••••••••••••••••" : "Enter ALM Password / Secret..."}
+                />
               </div>
             </div>
 

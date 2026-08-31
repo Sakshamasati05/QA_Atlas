@@ -3762,6 +3762,16 @@ app.post('/api/ado/upload', async (req, res) => {
   }
 });
 
+function makeNumberedList(htmlOrText) {
+  if (!htmlOrText) return '';
+  const text = htmlOrText.includes('<') && htmlOrText.includes('>') ? htmlToText(htmlOrText) : htmlOrText;
+  const lines = parseAndGroupCriteria(text);
+  return lines.map((line, idx) => {
+    const cleanLine = line.replace(/^([-\*\•\d+\.]|ac\d+[:\.-]?)\s*/i, '').trim();
+    return `${idx + 1}. ${cleanLine}`;
+  }).join('\n');
+}
+
 function parseAndGroupCriteria(text) {
   if (!text) return [];
   const criteriaLines = [];
@@ -3821,20 +3831,20 @@ app.post('/api/ado/work-item', async (req, res) => {
           id,
           title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
           description: htmlToText(`<p>Provide users with instant payment status notifications for ID ${id}.<br/>Ensure order validation occurs instantly on submit.</p>`),
-          acceptanceCriteria: htmlToText(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
+          acceptanceCriteria: makeNumberedList(`<ul><li>AC1: Process transaction within 2 seconds.</li><li>AC2: Trigger fallback retry on gateway timeout.</li></ul>`)
         });
         if (includeSubTasks) {
           mockResult.push({
             id: `${id}-child-1`,
             title: `(Sub-task of ${id}) Validation of transaction payment payload formatting`,
             description: `Check payload signature matches transaction ID ${id} before invoking third-party payments provider gateway service.`,
-            acceptanceCriteria: `1. Field 'transactionId' must be present in payment header.`
+            acceptanceCriteria: makeNumberedList(`1. Field 'transactionId' must be present in payment header.`)
           });
           mockResult.push({
             id: `${id}-child-2`,
             title: `(Sub-task of ${id}) Re-route to retry fallback queue on transaction errors`,
             description: `Verify that failures on transaction gateway redirect the payment routing to failover checkout queues.`,
-            acceptanceCriteria: `1. Re-route triggered on gateway code 504 timeout.`
+            acceptanceCriteria: makeNumberedList(`1. Re-route triggered on gateway code 504 timeout.`)
           });
         }
       });
@@ -3863,7 +3873,7 @@ app.post('/api/ado/work-item', async (req, res) => {
             id,
             title: fields['System.Title'] || '',
             description: htmlToText(fields['System.Description'] || fields['System.InfoTip'] || ''),
-            acceptanceCriteria: htmlToText(fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+            acceptanceCriteria: makeNumberedList(fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
           });
 
           // Fetch child items if includeSubTasks is enabled
@@ -3892,7 +3902,7 @@ app.post('/api/ado/work-item', async (req, res) => {
                       id: childId,
                       title: `(Sub-task of ${id}) ${childFields['System.Title'] || ''}`,
                       description: htmlToText(childFields['System.Description'] || childFields['System.InfoTip'] || ''),
-                      acceptanceCriteria: htmlToText(childFields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+                      acceptanceCriteria: makeNumberedList(childFields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
                     });
                   }
                 } catch (childErr) {
@@ -4022,7 +4032,7 @@ app.post('/api/jira/issue', async (req, res) => {
             key,
             summary: fields.summary || '',
             description: desc,
-            acceptanceCriteria: ac
+            acceptanceCriteria: makeNumberedList(ac)
           });
 
           // Fetch child subtasks if includeSubTasks is enabled
@@ -4061,7 +4071,7 @@ app.post('/api/jira/issue', async (req, res) => {
                     key: subKey,
                     summary: `(Sub-task of ${key}) ${subFields.summary || ''}`,
                     description: subDesc,
-                    acceptanceCriteria: subAc
+                    acceptanceCriteria: makeNumberedList(subAc)
                   });
                 }
               } catch (subErr) {
@@ -4100,6 +4110,177 @@ app.post('/api/jira/issue', async (req, res) => {
   }
 });
 
+app.post('/api/alm/work-item', async (req, res) => {
+  try {
+    let { almUrl, almDomain, almProject, almUsername, almPassword, reqId, includeSubTasks } = req.body;
+    if (!almUrl || !almDomain || !almProject || !almUsername || !almPassword || !reqId) {
+      return res.status(400).json({ success: false, error: 'Missing required fields (almUrl, almDomain, almProject, almUsername, almPassword, reqId).' });
+    }
+
+    if (!almUrl.startsWith('http://') && !almUrl.startsWith('https://')) {
+      almUrl = `https://${almUrl}`;
+    }
+    if (almUrl.endsWith('/')) {
+      almUrl = almUrl.slice(0, -1);
+    }
+
+    const ids = Array.isArray(reqId) ? reqId : [reqId];
+
+    if (almPassword === 'mock') {
+      const mockResult = [];
+      ids.forEach(id => {
+        mockResult.push({
+          id,
+          title: `Verify user profile fields management requirements for ID ${id}`,
+          description: `This is a mock description of ALM Requirement ID ${id}.\nIt covers boundary condition verification for text fields.`,
+          acceptanceCriteria: makeNumberedList(`- AC1: Name fields must reject scripts.\n- AC2: Save states to local profile DB.`)
+        });
+        if (includeSubTasks) {
+          mockResult.push({
+            key: `${id}-sub-1`,
+            id: `${id}-sub-1`,
+            title: `(Child of ${id}) Validation of transaction payment payload formatting`,
+            description: `Check payload signature matches transaction ID ${id} before invoking gateway.`,
+            acceptanceCriteria: makeNumberedList(`1. Field 'transactionId' must be present in payment header.`)
+          });
+          mockResult.push({
+            key: `${id}-sub-2`,
+            id: `${id}-sub-2`,
+            title: `(Child of ${id}) Re-route to retry fallback queue on transaction errors`,
+            description: `Verify that failures on transaction gateway redirect the payment routing.`,
+            acceptanceCriteria: makeNumberedList(`1. Re-route triggered on gateway code 504 timeout.`)
+          });
+        }
+      });
+      return res.json({ success: true, workItems: mockResult });
+    }
+
+    // Live ALM API call sequence
+    const loginUrl = `${almUrl}/api/authentication/sign-in`;
+    const basicAuth = Buffer.from(`${almUsername}:${almPassword}`).toString('base64');
+    
+    const loginResponse = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!loginResponse.ok) {
+      throw new Error(`ALM Sign-In failed with status: ${loginResponse.status}`);
+    }
+
+    const setCookieHeader = loginResponse.headers.get('set-cookie');
+    const cookies = setCookieHeader ? setCookieHeader.split(',').map(c => c.split(';')[0]).join('; ') : '';
+
+    const fetchedItems = [];
+
+    const getFieldValue = (fieldsArray, fieldName) => {
+      const field = (fieldsArray || []).find(f => f.Name === fieldName || f.name === fieldName);
+      if (field && field.values && field.values.length > 0) {
+        return field.values[0].value || '';
+      }
+      return '';
+    };
+
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const reqUrl = `${almUrl}/rest/domains/${almDomain}/projects/${almProject}/requirements/${id}`;
+        const reqResponse = await fetch(reqUrl, {
+          method: 'GET',
+          headers: {
+            'Cookie': cookies,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (reqResponse.ok) {
+          const reqData = await reqResponse.json();
+          const fields = reqData.Fields || reqData.fields || [];
+          const name = getFieldValue(fields, 'name');
+          const descriptionHtml = getFieldValue(fields, 'description');
+          const description = htmlToText(descriptionHtml);
+          const ac = extractAcceptanceCriteria(description) || htmlToText(getFieldValue(fields, 'comments') || '');
+
+          fetchedItems.push({
+            id,
+            title: name,
+            description: ac ? description.replace(ac, '').trim() : description,
+            acceptanceCriteria: makeNumberedList(ac)
+          });
+
+          if (includeSubTasks) {
+            const queryUrl = `${almUrl}/rest/domains/${almDomain}/projects/${almProject}/requirements?query={parent-id[${id}]}`;
+            const childQueryResponse = await fetch(queryUrl, {
+              method: 'GET',
+              headers: {
+                'Cookie': cookies,
+                'Accept': 'application/json'
+              }
+            });
+
+            if (childQueryResponse.ok) {
+              const childQueryData = await childQueryResponse.json();
+              const childReqs = childQueryData.entities || childQueryData.Requirements || [];
+              
+              await Promise.all(childReqs.map(async (child) => {
+                try {
+                  const childFields = child.Fields || child.fields || [];
+                  const childId = getFieldValue(childFields, 'id') || getFieldValue(childFields, 'req-id');
+                  const childName = getFieldValue(childFields, 'name');
+                  const childDescHtml = getFieldValue(childFields, 'description');
+                  const childDesc = htmlToText(childDescHtml);
+                  const childAc = extractAcceptanceCriteria(childDesc) || htmlToText(getFieldValue(childFields, 'comments') || '');
+
+                  fetchedItems.push({
+                    id: childId,
+                    title: `(Child of ${id}) ${childName}`,
+                    description: childAc ? childDesc.replace(childAc, '').trim() : childDesc,
+                    acceptanceCriteria: makeNumberedList(childAc)
+                  });
+                } catch (childErr) {
+                  console.error(`Error parsing child requirement:`, childErr.message);
+                }
+              }));
+            }
+          }
+        } else {
+          console.error(`Failed to fetch ALM requirement ${id}: Status ${reqResponse.status}`);
+        }
+      } catch (err) {
+        console.error(`Error fetching ALM requirement ${id}:`, err.message);
+      }
+    }));
+
+    try {
+      await fetch(`${almUrl}/api/authentication/sign-out`, {
+        method: 'POST',
+        headers: { 'Cookie': cookies }
+      });
+    } catch (_) {}
+
+    if (fetchedItems.length === 0) {
+      throw new Error('No valid ALM requirements could be fetched.');
+    }
+
+    fetchedItems.sort((a, b) => {
+      const aParent = ids.includes(a.id);
+      const bParent = ids.includes(b.id);
+      if (aParent && !bParent) return -1;
+      if (!aParent && bParent) return 1;
+      return 0;
+    });
+
+    return res.json({
+      success: true,
+      workItems: fetchedItems
+    });
+  } catch (error) {
+    console.error('[ALM Fetch Error]:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 const PORT = 5000;
 app.listen(PORT, () => {
