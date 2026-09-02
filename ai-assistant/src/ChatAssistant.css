@@ -1795,17 +1795,19 @@ body {
 .header-user-widget {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 10px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.05));
   border: 1px solid var(--border-color);
-  padding: 4px 10px 4px 4px;
+  padding: 4px 12px 4px 6px;
   border-radius: 30px;
   transition: all 0.2s ease;
   margin-right: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .header-user-widget:hover {
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--primary);
+  background: var(--bg-sidebar, rgba(255, 255, 255, 0.08));
 }
 
 .header-user-info {
@@ -1818,14 +1820,15 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--accent-gradient);
-  color: white;
+  background: linear-gradient(135deg, var(--primary, #4f46e5), var(--accent, #6366f1));
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 13px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+  flex-shrink: 0;
 }
 
 .header-user-details {

@@ -3103,7 +3103,10 @@ _Reported via QAutopilot Execution Engine_`;
             <div className="header-user-widget">
               <div className="header-user-info">
                 <div className="header-user-avatar">
-                  {(currentUser.name || 'U')[0].toUpperCase()}
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
                 </div>
                 <div className="header-user-details">
                   <span className="header-user-name">{currentUser.name}</span>
