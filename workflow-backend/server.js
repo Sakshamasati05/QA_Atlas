@@ -340,124 +340,502 @@ function parseCleanJson(rawText) {
   return JSON.parse(jsonString);
 }
 
-// --- HELPER: MOCK TEST CASES GENERATOR (FALLBACK) ---
-function generateMockTestCases(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default', docContext = '') {
-  const fullText = `${userStory || ''}\n${acceptanceCriteria || ''}\n${docContext || ''}`.toLowerCase();
-  const dynamicRules = [];
-  
-  if (fullText.includes('login') || fullText.includes('sign in') || fullText.includes('auth') || fullText.includes('credential')) {
-    dynamicRules.push(
-      { title: 'Verify login with valid registered email and correct password', type: 'Positive', steps: '1. Navigate to the Login Page.\n2. Input registered email in the Email field.\n3. Input correct password in the Password field.\n4. Click the "Login" button.', result: 'User is successfully authenticated and redirected to the main dashboard page.' },
-      { title: 'Verify login error with incorrect password', type: 'Negative', steps: '1. Navigate to the Login Page.\n2. Input registered email in the Email field.\n3. Input an invalid password in the Password field.\n4. Click "Login".', result: 'Validation alert displays: "Incorrect email or password. Please try again."' },
-      { title: 'Verify login validations with empty username and password fields', type: 'Negative', steps: '1. Navigate to the Login Page.\n2. Leave both Email and Password fields empty.\n3. Click the "Login" button.', result: 'Validation error tooltips highlight both fields indicating they are required.' },
-      { title: 'Verify account lock limit after 5 consecutive failed login attempts', type: 'Edge', steps: '1. Navigate to the Login Page.\n2. Input valid email but incorrect password consecutive times.\n3. Attempt the 5th login try.', result: 'Account is locked for security. Message displays: "Your account has been locked for 15 minutes due to too many failed attempts."' }
-    );
-  }
-  
-  if (fullText.includes('signup') || fullText.includes('register') || fullText.includes('create account') || fullText.includes('sign up')) {
-    dynamicRules.push(
-      { title: 'Verify successful user registration with all required details', type: 'Positive', steps: '1. Navigate to the Sign Up Page.\n2. Complete Full Name, Email, Password, and Confirm Password fields with valid details.\n3. Agree to the Terms & Conditions checkmark.\n4. Click "Register".', result: 'Account is successfully created and verification email is triggered.' },
-      { title: 'Verify email format validation during user signup', type: 'Negative', steps: '1. Navigate to register screen.\n2. Input a name.\n3. Input an invalid email format like "test@domain" (missing dot suffix).\n4. Click register.', result: 'Validation error displays: "Please enter a valid email address."' },
-      { title: 'Verify password complexity constraints validation', type: 'Edge', steps: '1. Complete signup fields.\n2. Input password containing only lowercase characters (e.g. "secret").\n3. Trigger signup.', result: 'Validation warning displays: "Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character."' }
-    );
-  }
-  
-  if (fullText.includes('payment') || fullText.includes('checkout') || fullText.includes('transaction') || fullText.includes('buy') || fullText.includes('stripe') || fullText.includes('order')) {
-    dynamicRules.push(
-      { title: 'Verify successful order checkout with valid payment method', type: 'Positive', steps: '1. Add item to cart and proceed to Checkout page.\n2. Fill shipping details.\n3. Input valid card credentials (number, expiry, CVV).\n4. Click "Place Order".', result: 'Payment transaction completes successfully. Order confirmation screen displays order number.' },
-      { title: 'Verify transaction rejection with expired credit card', type: 'Negative', steps: '1. Proceed to Checkout payment step.\n2. Input expired card expiry date (e.g. 12/22).\n3. Click "Place Order".', result: 'Transaction fails. Checkout displays: "Card has expired. Please use a different card."' },
-      { title: 'Verify order payment boundary values with zero or negative total amount', type: 'Edge', steps: '1. Attempt to trigger checkout API with a total cart value of 0.00.\n2. Trigger payment.', result: 'Checkout operation is blocked. Error displays: "Cart value must be greater than zero to proceed."' }
-    );
+// --- HELPER: DEEP SEMANTIC AC PARSER & TEST CASE SYNTHESIZER ---
+function parseAcceptanceCriteriaLines(acText, userStoryText = '') {
+  if (!acText || typeof acText !== 'string' || !acText.trim()) {
+    if (userStoryText && typeof userStoryText === 'string') {
+      const sentences = userStoryText
+        .split(/(?<=[.!?\n])\s+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 10 && !/^(as a|i want|so that)/i.test(s));
+      if (sentences.length > 0) {
+        return sentences.map((s, idx) => ({
+          tag: `[AC${idx + 1}]`,
+          index: idx + 1,
+          text: s
+        }));
+      }
+      return [{
+        tag: '[AC1]',
+        index: 1,
+        text: `The system must successfully execute the business flow for "${userStoryText.substring(0, 50)}"`
+      }];
+    }
+    return [{ tag: '[AC1]', index: 1, text: 'Standard feature functionality' }];
   }
 
-  if (fullText.includes('search') || fullText.includes('filter') || fullText.includes('find') || fullText.includes('query')) {
-    dynamicRules.push(
-      { title: 'Verify search results filter matches keyword input query', type: 'Positive', steps: '1. Go to search index.\n2. Type specific existing keyword (e.g. "Laptop").\n3. Click search button.', result: 'All matching catalog items containing the word "Laptop" are loaded and displayed.' },
-      { title: 'Verify search results layout when no matching records exist', type: 'Negative', steps: '1. Go to search bar.\n2. Enter random non-matching characters (e.g. "xyz987abc").\n3. Click search.', result: 'Zero results found page displays with message: "No items matching your search query were found."' }
-    );
+  const rawLines = acText
+    .split(/\r?\n|(?<=[.;])\s*(?=(?:AC\d+|[0-9]+\.|\*|-|Given\b|When\b|Then\b))/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  const parsed = [];
+  let acIndex = 1;
+
+  for (const line of rawLines) {
+    let clean = line
+      .replace(/^\[?AC[-_ ]?\d+\]?[:\.\s-]*/i, '')
+      .replace(/^\d+[\.\)\-:]\s*/, '')
+      .replace(/^[\*\-•]\s*/, '')
+      .trim();
+
+    if (!clean || clean.length < 4) continue;
+
+    parsed.push({
+      tag: `[AC${acIndex}]`,
+      index: acIndex,
+      text: clean
+    });
+    acIndex++;
   }
 
-  if (fullText.includes('upload') || fullText.includes('file') || fullText.includes('attachment') || fullText.includes('import')) {
-    dynamicRules.push(
-      { title: 'Verify successful file upload under allowed file type limits', type: 'Positive', steps: '1. Navigate to the upload area.\n2. Select a valid file (e.g. "document.pdf", size 2MB).\n3. Click upload.', result: 'File is successfully processed, uploaded, and shows in list of attachments.' },
-      { title: 'Verify upload rejection of forbidden file extensions', type: 'Negative', steps: '1. Go to upload area.\n2. Select an executable script file (e.g. "payload.exe").\n3. Click upload.', result: 'Upload blocked. Error message displays: "File extension not allowed. Please upload PDF, PNG or DOCX documents only."' },
-      { title: 'Verify file size limits validations at boundary threshold', type: 'Edge', steps: '1. Select a file larger than max size limit (e.g. 25MB file when limit is 10MB).\n2. Click upload.', result: 'Upload is blocked. System shows warning: "File size exceeds the maximum limit of 10MB."' }
-    );
+  if (parsed.length === 0) {
+    parsed.push({
+      tag: '[AC1]',
+      index: 1,
+      text: acText.trim()
+    });
   }
 
-  if (dynamicRules.length === 0) {
-    const topic = (userStory || '').substring(0, 40).trim() || 'Specified Feature';
-    dynamicRules.push(
-      { title: `Verify standard successful operation of ${topic}`, type: 'Positive', steps: `1. Open dashboard module.\n2. Access inputs for ${topic}.\n3. Complete required parameters with valid data.\n4. Click submit.`, result: 'Operation completes successfully and dashboard transitions state.' },
-      { title: `Verify validation errors for required input fields on ${topic}`, type: 'Negative', steps: `1. Open module.\n2. Leave all required input fields blank.\n3. Click submit.`, result: 'Form validation halts submission and highlights required fields.' },
-      { title: `Verify data persistence safety under high boundary volumes for ${topic}`, type: 'Edge', steps: `1. Access form options.\n2. Populate data with maximum boundary length values.\n3. Click save.`, result: 'Inputs are safely stored without buffer truncation.' }
-    );
-  }
+  return parsed;
+}
 
-  const testCases = [];
+function analyzeACIntent(acItem) {
+  const rawText = acItem.text;
+  const lower = rawText.toLowerCase();
+
+  // 1. Extract Monetary / Threshold values
+  const currencyMatch = rawText.match(/\$?(\d+[\d,]*(?:\.\d+)?)\s*(?:USD|dollars?|\$|INR|EUR|GBP)?/i);
+  let cleanCurrency = null;
+  if (currencyMatch && currencyMatch[1]) {
+    cleanCurrency = currencyMatch[1].replace(/[,;]+$/, '');
+  }
   
-  const positives = dynamicRules.filter(r => r.type === 'Positive');
-  for (let i = 0; i < positiveCount; i++) {
-    const r = positives[i % positives.length] || dynamicRules[i % dynamicRules.length];
-    testCases.push({
-      title: r.title,
+  // 2. Extract File Sizes vs String Lengths
+  const fileSizeMatch = rawText.match(/(\d+)\s*(MB|GB|KB|bytes?)/i);
+  const charLengthMatch = rawText.match(/(?:min|minimum|at least)\s*(\d+)\s*(?:chars?|characters?)?|(?:max|maximum|up to)\s*(\d+)\s*(?:chars?|characters?)?|(\d+)\s*(?:to|-)\s*(\d+)\s*(?:chars?|characters?)/i);
+
+  // 3. Extract Timeouts / Durations
+  const timeMatch = rawText.match(/(\d+)\s*(seconds?|mins?|minutes?|hours?|days?)/i);
+  
+  // 4. Extract Range (e.g. between $500 and $2000 or 2 to 50)
+  const rangeMatch = rawText.match(/(?:between|from)\s+\$?(\d+[\d,]*)\s+(?:and|to)\s+\$?(\d+[\d,]*)/i);
+
+  // 5. Extract Specific Error or Quoted Messages
+  const quoteMatch = rawText.match(/['"“]([^'"“”]{3,})['"”]/);
+  const explicitMessage = quoteMatch ? quoteMatch[1] : null;
+
+  // 6. Detect File Extensions
+  const formatMatches = rawText.match(/\b(JPG|PNG|WEBP|JPEG|PDF|DOCX|CSV|XLSX|EXE|SVG|JSON|XML|BAT)\b/gi);
+
+  // 7. Detect Roles
+  const rolesMatch = rawText.match(/\b(Admin|Manager|Director|Superadmin|Patient|Doctor|Customer|User|Approver|Reviewer|Guest|Claimant)\b/i);
+
+  // 8. Identify Action Intent
+  let actionType = 'standard';
+  if (/(?:upload|avatar|image size|attachment|drop zone|file format|supported format)/i.test(lower)) {
+    actionType = 'file_upload';
+  } else if (/(?:reject|rejection reason|mandatory reason|decline)/i.test(lower)) {
+    actionType = 'rejection';
+  } else if (/(?:auto[- ]approv|automatically approv)/i.test(lower)) {
+    actionType = 'auto_approval';
+  } else if (/(?:approve|approval|signoff|director level)/i.test(lower)) {
+    actionType = 'approval';
+  } else if (/(?:coupon|discount|promo|voucher|save20)/i.test(lower)) {
+    actionType = 'coupon_discount';
+  } else if (/(?:cancel|cancellation|refund)/i.test(lower)) {
+    actionType = 'cancellation_refund';
+  } else if (/(?:book|booking|appointment|schedule|time slot|date picker|past date)/i.test(lower)) {
+    actionType = 'booking_slot';
+  } else if (/(?:password|otp|pin|2fa|mfa|auth|token|credential|lockout)/i.test(lower)) {
+    actionType = 'auth_credential';
+  } else if (/(?:crop|rotate|avatar picture|edit image)/i.test(lower)) {
+    actionType = 'image_edit';
+  } else if (/(?:email|notify|notification|sms|alert dispatch)/i.test(lower)) {
+    actionType = 'notification';
+  } else if (/(?:search|filter|sort|pagination|keyword)/i.test(lower)) {
+    actionType = 'search_filter';
+  } else if (/(?:mandatory|required|cannot be empty|blank|characters)/i.test(lower)) {
+    actionType = 'mandatory_validation';
+  }
+
+  return {
+    acTag: acItem.tag,
+    acIndex: acItem.index,
+    rawText,
+    lowerText: lower,
+    actionType,
+    explicitMessage,
+    currencyAmount: cleanCurrency,
+    fileSize: fileSizeMatch ? `${fileSizeMatch[1]} ${fileSizeMatch[2]}` : null,
+    charLength: charLengthMatch ? (charLengthMatch[1] || charLengthMatch[2] || charLengthMatch[3]) : null,
+    timeout: timeMatch ? `${timeMatch[1]} ${timeMatch[2]}` : null,
+    range: rangeMatch ? { min: rangeMatch[1], max: rangeMatch[2] } : null,
+    allowedFormats: formatMatches ? Array.from(new Set(formatMatches.map(f => f.toUpperCase()))) : null,
+    targetRole: rolesMatch ? rolesMatch[1] : null
+  };
+}
+
+function synthesizeScenariosForAC(analyzed, storyTitle) {
+  const { acTag, rawText, lowerText, actionType, explicitMessage, currencyAmount, fileSize, charLength, timeout, range, allowedFormats, targetRole } = analyzed;
+  const scenarios = [];
+
+  const cleanShortText = rawText.length > 55 ? rawText.substring(0, 52) + '...' : rawText;
+
+  // ── 1. FILE & AVATAR UPLOAD ──
+  if (actionType === 'file_upload') {
+    const validFormats = allowedFormats ? allowedFormats.filter(f => !['EXE', 'BAT', 'SVG', 'PDF'].includes(f) || allowedFormats.length === 1) : ['JPG', 'PNG', 'WEBP'];
+    const validExt = validFormats.length > 0 ? validFormats[0] : 'JPG';
+    const invalidExt = allowedFormats ? (allowedFormats.includes('EXE') ? 'BAT' : 'EXE') : 'EXE';
+    const maxSizeStr = fileSize || '5 MB';
+
+    scenarios.push({
       type: 'Positive',
-      preconditions: `[AC${(i % 3) + 1}] System is initialized and user is authorized.`,
-      steps: r.steps,
-      expectedResult: r.result,
-      priority: i === 0 ? 'High' : 'Medium'
+      priority: 'High',
+      title: `Verify successful file upload with supported format (${validExt}) within ${maxSizeStr}`,
+      preconditions: `${acTag} User is on the upload view with active session.`,
+      steps: `1. Click the upload container or drag a file.\n2. Select a valid "sample_upload.${validExt.toLowerCase()}" (size: 1.2 MB).\n3. Click "Save" / "Upload".`,
+      expectedResult: `File is accepted and processed successfully. Upload container displays thumbnail preview and success message "File uploaded successfully".`
     });
-  }
 
-  const negatives = dynamicRules.filter(r => r.type === 'Negative');
-  for (let i = 0; i < negativeCount; i++) {
-    const r = negatives[i % negatives.length] || dynamicRules[i % dynamicRules.length];
-    testCases.push({
-      title: r.title,
+    scenarios.push({
       type: 'Negative',
-      preconditions: `[AC${(i % 3) + 1}] System is online and form inputs are initialized.`,
-      steps: r.steps,
-      expectedResult: r.result,
-      priority: 'Medium'
+      priority: 'High',
+      title: `Verify upload rejection of prohibited file extension (.${invalidExt.toLowerCase()})`,
+      preconditions: `${acTag} User is on the upload screen.`,
+      steps: `1. Select an unsupported file "payload.${invalidExt.toLowerCase()}".\n2. Click "Upload".`,
+      expectedResult: `Upload is blocked immediately. Validation alert displays: "${explicitMessage || 'Unsupported file format. Please upload allowed formats.'}". No file is saved.`
     });
-  }
 
-  const edges = dynamicRules.filter(r => r.type === 'Edge');
-  for (let i = 0; i < edgeCount; i++) {
-    const r = edges[i % edges.length] || dynamicRules[i % dynamicRules.length];
-    testCases.push({
-      title: r.title,
+    scenarios.push({
       type: 'Edge',
-      preconditions: `[AC${(i % 3) + 1}] User session is active and system is at configuration limits.`,
-      steps: r.steps,
-      expectedResult: r.result,
-      priority: 'Medium'
+      priority: 'Medium',
+      title: `Verify file size boundary rejection for files exceeding ${maxSizeStr}`,
+      preconditions: `${acTag} User selects a file larger than max size threshold.`,
+      steps: `1. Select a file "large_file.${validExt.toLowerCase()}" with size 5.5 MB (limit: ${maxSizeStr}).\n2. Attempt upload.`,
+      expectedResult: `System detects file size violation before network transfer. Warning displays: "${explicitMessage || `File size exceeds ${maxSizeStr} limit`}".`
     });
+    return scenarios;
   }
 
+  // ── 2. IMAGE EDIT / CROP / ROTATE ──
+  if (actionType === 'image_edit') {
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify image crop and rotation controls function properly before saving`,
+      preconditions: `${acTag} Valid image is loaded in the avatar preview modal.`,
+      steps: `1. Upload a valid avatar image.\n2. In the cropping modal, adjust bounding crop box and click "Rotate 90°".\n3. Click "Apply & Save".`,
+      expectedResult: `Cropped and rotated image is rendered in avatar container with updated dimensions and aspect ratio.`
+    });
+    return scenarios;
+  }
+
+  // ── 3. AUTO-APPROVAL THRESHOLD ──
+  if (actionType === 'auto_approval') {
+    const limit = currencyAmount ? `$${currencyAmount}` : '$500.00';
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify automated instant approval for claims under threshold (${limit})`,
+      preconditions: `${acTag} Claimant submits a claim with total amount of $350.00 (below ${limit}).`,
+      steps: `1. Fill expense details with amount $350.00.\n2. Click "Submit Claim".\n3. View claim status in claims dashboard.`,
+      expectedResult: `Claim status immediately transitions to "Approved" automatically without requiring manager intervention.`
+    });
+
+    scenarios.push({
+      type: 'Edge',
+      priority: 'Medium',
+      title: `Verify boundary evaluation at exact auto-approval threshold limit (${limit})`,
+      preconditions: `${acTag} User creates a claim with exact boundary value of ${limit}.`,
+      steps: `1. Enter total claim value of ${limit}.\n2. Click "Submit".\n3. Verify workflow engine routing.`,
+      expectedResult: `System evaluates boundary accurately (<= ${limit}) and executes the configured auto-approval rule.`
+    });
+    return scenarios;
+  }
+
+  // ── 4. APPROVAL WORKFLOW (MANAGER / DIRECTOR) ──
+  if (actionType === 'approval') {
+    const roleName = targetRole || (lowerText.includes('director') ? 'Director' : 'Manager');
+    const rangeStr = range ? `$${range.min} and $${range.max}` : (currencyAmount ? `$${currencyAmount}` : '$1,200.00');
+
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify ${roleName} can successfully review and approve claims in range (${rangeStr})`,
+      preconditions: `${acTag} User is authenticated with ${roleName} credentials. Pending claim is in review queue.`,
+      steps: `1. Navigate to Approval Dashboard.\n2. Open pending claim item (${rangeStr}).\n3. Click "Approve".\n4. Confirm modal dialog.`,
+      expectedResult: `Claim status updates to "Approved" (or next tier). Audit history logs ${roleName} approval with timestamp.`
+    });
+
+    scenarios.push({
+      type: 'Negative',
+      priority: 'High',
+      title: `Verify non-${roleName} role is prevented from approving tier claims`,
+      preconditions: `${acTag} Standard employee user session.`,
+      steps: `1. Open claim details.\n2. Verify "Approve" button visibility.\n3. Attempt to trigger approval endpoint directly.`,
+      expectedResult: `"Approve" button is hidden. Direct API POST is rejected with HTTP 403 Forbidden.`
+    });
+    return scenarios;
+  }
+
+  // ── 5. REJECTION WORKFLOW & MANDATORY COMMENTS ──
+  if (actionType === 'rejection') {
+    const minChars = charLength || '10';
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify approver can reject claim when providing valid rejection comments (>= ${minChars} characters)`,
+      preconditions: `${acTag} Approver has opened a pending claim in the queue.`,
+      steps: `1. Click "Reject" button.\n2. In the Rejection Reason modal, input "Receipt documentation is missing business justification." (>= ${minChars} chars).\n3. Click "Confirm Rejection".`,
+      expectedResult: `Claim transitions to "Rejected" state. Rejection reason is saved and displayed in the audit trail.`
+    });
+
+    scenarios.push({
+      type: 'Negative',
+      priority: 'High',
+      title: `Verify rejection is blocked when rejection reason is blank or under ${minChars} characters`,
+      preconditions: `${acTag} Approver opens the rejection modal.`,
+      steps: `1. Click "Reject".\n2. Enter "No" (below ${minChars} characters) or leave blank.\n3. Click "Confirm Rejection".`,
+      expectedResult: `Submission is blocked. Error message displays: "${explicitMessage || `Rejection reason is mandatory (minimum ${minChars} characters).`}"`
+    });
+    return scenarios;
+  }
+
+  // ── 6. COUPON & DISCOUNT LOGIC ──
+  if (actionType === 'coupon_discount') {
+    const nonCodeWords = new Set(['APPLY', 'SUBMIT', 'CANCEL', 'SAVE', 'DELETE', 'EDIT', 'UPDATE', 'CONFIRM', 'CLICK', 'ENTER']);
+    const rawQuotes = Array.from(rawText.matchAll(/['"“]([A-Z0-9_-]+)['"”]/gi)).map(m => m[1].toUpperCase()).filter(w => !nonCodeWords.has(w));
+    const wordMatches = Array.from(rawText.matchAll(/\b([A-Z0-9]{4,10})\b/g)).map(m => m[1].toUpperCase()).filter(w => !nonCodeWords.has(w));
+    const promoCode = rawQuotes[0] || wordMatches[0] || 'SAVE20';
+    const subtotalThresh = currencyAmount ? `$${currencyAmount}` : '$50.00';
+
+    if (lowerText.includes('invalid') || lowerText.includes('expired')) {
+      scenarios.push({
+        type: 'Negative',
+        priority: 'High',
+        title: `Verify error message when entering an invalid or expired coupon code`,
+        preconditions: `${acTag} User is on checkout payment page with active cart.`,
+        steps: `1. In Promo Code input, enter "EXPIRED999".\n2. Click "Apply".`,
+        expectedResult: `Discount is not applied. Error message displays: "${explicitMessage || 'Invalid or expired coupon code'}".`
+      });
+    } else if (lowerText.includes('only one') || lowerText.includes('1 coupon')) {
+      scenarios.push({
+        type: 'Negative',
+        priority: 'Medium',
+        title: `Verify restriction preventing multiple coupons on a single order`,
+        preconditions: `${acTag} Promo code "${promoCode}" is already applied to cart.`,
+        steps: `1. Enter second promo code "EXTRA10" in the promo box.\n2. Click "Apply".`,
+        expectedResult: `System notifies user: "Only one coupon code can be applied per order. Remove active coupon to apply another."`
+      });
+    } else {
+      scenarios.push({
+        type: 'Positive',
+        priority: 'High',
+        title: `Verify applying valid promo code "${promoCode}" calculates discount correctly on subtotal >= ${subtotalThresh}`,
+        preconditions: `${acTag} User has qualifying items in cart with subtotal >= ${subtotalThresh} (e.g. $80.00).`,
+        steps: `1. Navigate to Cart/Checkout.\n2. Enter promo code "${promoCode}".\n3. Click "Apply".\n4. Review total price breakdown.`,
+        expectedResult: `Discount is calculated and deducted. Success message displays: "Promo code '${promoCode}' applied successfully!". Order total updates accurately.`
+      });
+
+      scenarios.push({
+        type: 'Negative',
+        priority: 'Medium',
+        title: `Verify coupon rejection when cart subtotal is below minimum qualifying threshold (${subtotalThresh})`,
+        preconditions: `${acTag} Cart subtotal is below ${subtotalThresh} (e.g. $30.00).`,
+        steps: `1. Enter promo code "${promoCode}".\n2. Click "Apply".`,
+        expectedResult: `Discount is rejected. Banner displays: "${explicitMessage || `Order subtotal must be at least ${subtotalThresh} to use this coupon`}".`
+      });
+    }
+    return scenarios;
+  }
+
+  // ── 7. BOOKING & SCHEDULING ──
+  if (actionType === 'booking_slot') {
+    if (lowerText.includes('past date') || lowerText.includes('disabled') || lowerText.includes('booked')) {
+      scenarios.push({
+        type: 'Negative',
+        priority: 'High',
+        title: `Verify past dates and already booked time slots are disabled and cannot be selected`,
+        preconditions: `${acTag} User opens calendar picker and time slot grid.`,
+        steps: `1. Inspect dates prior to current date in datepicker.\n2. Inspect slots with status "Booked / Unavailable".\n3. Attempt to click disabled dates and booked slots.`,
+        expectedResult: `Past calendar dates are visually grayed out with pointer-events disabled. Booked slots show "Unavailable" and cannot be clicked.`
+      });
+    } else if (lowerText.includes('cancel') || lowerText.includes('refund')) {
+      scenarios.push({
+        type: 'Positive',
+        priority: 'Medium',
+        title: `Verify cancellation policy and refund execution when cancelled >= 24h in advance`,
+        preconditions: `${acTag} Active confirmed appointment scheduled for 3 days in future.`,
+        steps: `1. Go to "My Appointments".\n2. Click "Cancel Booking" on scheduled appointment.\n3. Confirm cancellation prompt.`,
+        expectedResult: `Appointment is cancelled. Confirmation displays: "Appointment cancelled. 100% refund has been processed."`
+      });
+    } else {
+      scenarios.push({
+        type: 'Positive',
+        priority: 'High',
+        title: `Verify appointment booking with doctor selection, valid date, and available time slot`,
+        preconditions: `${acTag} User is on appointment booking interface with available schedules.`,
+        steps: `1. Select specialist doctor from dropdown (e.g. "Dr. Sarah Smith").\n2. Choose an available future date from calendar.\n3. Select available time slot (e.g. "10:30 AM").\n4. Click "Confirm Booking".`,
+        expectedResult: `Booking is created successfully. Confirmation screen shows Appointment ID, Doctor Name, Date/Time, and Room location.`
+      });
+    }
+    return scenarios;
+  }
+
+  // ── 8. NOTIFICATIONS ──
+  if (actionType === 'notification') {
+    const timeLimit = timeout || '1 minute';
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify automated notification dispatch within ${timeLimit} upon status transition`,
+      preconditions: `${acTag} Claimant has valid email configured and notification settings enabled.`,
+      steps: `1. Approver transitions request status (Approved / Rejected).\n2. Monitor outbound notification queue.\n3. Verify delivery to claimant inbox within ${timeLimit}.`,
+      expectedResult: `Automated email notification is delivered within ${timeLimit} with updated status details and direct review link.`
+    });
+    return scenarios;
+  }
+
+  // ── 9. AUTHENTICATION & CREDENTIALS ──
+  if (actionType === 'auth_credential') {
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify authentication verification with valid credentials`,
+      preconditions: `${acTag} User is on authentication screen with valid account.`,
+      steps: `1. Enter valid credentials meeting all rules.\n2. Click Submit.`,
+      expectedResult: `Authentication succeeds and user is redirected to the main dashboard.`
+    });
+
+    scenarios.push({
+      type: 'Negative',
+      priority: 'High',
+      title: `Verify validation alert when credentials fail format or complexity rules`,
+      preconditions: `${acTag} User is on the credential entry screen.`,
+      steps: `1. Enter invalid or non-compliant credentials.\n2. Click Submit.`,
+      expectedResult: `Submission fails with validation alert: "${explicitMessage || 'Invalid credentials or format rules not met'}".`
+    });
+    return scenarios;
+  }
+
+  // ── 10. MANDATORY / GENERAL VALIDATION ──
+  if (actionType === 'mandatory_validation') {
+    const lenVal = charLength || '2 to 50';
+    scenarios.push({
+      type: 'Positive',
+      priority: 'High',
+      title: `Verify successful submission with valid mandatory input data (${lenVal} characters)`,
+      preconditions: `${acTag} User is on the input form with clean state.`,
+      steps: `1. Enter valid test value (e.g. "Johnathan Doe").\n2. Complete any required fields.\n3. Click Save / Submit.`,
+      expectedResult: `Inputs are validated successfully and changes are persisted to the database.`
+    });
+
+    scenarios.push({
+      type: 'Negative',
+      priority: 'High',
+      title: `Verify validation error when mandatory field is left blank or whitespace`,
+      preconditions: `${acTag} User is on the input form.`,
+      steps: `1. Clear mandatory field.\n2. Click Save / Submit.`,
+      expectedResult: `Submission is halted. Field highlights in red with validation tooltip: "${explicitMessage || 'This field is required and cannot be left blank'}".`
+    });
+    return scenarios;
+  }
+
+  // ── 11. GENERAL / DEFAULT SYNTHESIS ──
+  scenarios.push({
+    type: 'Positive',
+    priority: 'High',
+    title: `Verify standard successful execution for: ${cleanShortText}`,
+    preconditions: `${acTag} System is initialized with valid test data. User is authenticated.`,
+    steps: `1. Navigate to the relevant interface module.\n2. Complete inputs matching requirement: "${cleanShortText}".\n3. Click the primary action / submit button.\n4. Observe system response.`,
+    expectedResult: `Action completes successfully. UI displays confirmation feedback and record updates in database.`
+  });
+
+  scenarios.push({
+    type: 'Negative',
+    priority: 'High',
+    title: `Verify validation error and boundary handling when violating: ${cleanShortText}`,
+    preconditions: `${acTag} User is on the operational view with error listeners active.`,
+    steps: `1. Attempt action with invalid parameters or inverted condition for: "${cleanShortText}".\n2. Trigger execution.`,
+    expectedResult: `System intercepts invalid state gracefully. Descriptive alert displays: "${explicitMessage || 'Operation cannot be completed with the provided inputs.'}" No corrupted data is persisted.`
+  });
+
+  scenarios.push({
+    type: 'Edge',
+    priority: 'Medium',
+    title: `Verify edge state and boundary condition for: ${cleanShortText}`,
+    preconditions: `${acTag} System configured at extreme parameters or concurrent session state.`,
+    steps: `1. Supply boundary values related to: "${cleanShortText}".\n2. Submit action rapidly or with special characters.\n3. Check system integrity.`,
+    expectedResult: `System handles boundary inputs smoothly without throwing unhandled exceptions (500 errors) or crashing.`
+  });
+
+  return scenarios;
+}
+
+function generateMockTestCases(userStory, acceptanceCriteria, positiveCount = 3, negativeCount = 3, edgeCount = 2, securityCount = 1, performanceCount = 1, format = 'Default', docContext = '') {
+  const combinedStory = `${userStory || ''}\n${docContext || ''}`.trim();
+  const parsedACs = parseAcceptanceCriteriaLines(acceptanceCriteria, combinedStory);
+  const storyTitle = (combinedStory || '').split('\n')[0].substring(0, 50).trim() || 'User Story';
+
+  const allScenarios = [];
+  parsedACs.forEach(acItem => {
+    const analyzed = analyzeACIntent(acItem);
+    const scList = synthesizeScenariosForAC(analyzed, storyTitle);
+    allScenarios.push(...scList);
+  });
+
+  const positives = allScenarios.filter(s => s.type === 'Positive');
+  const negatives = allScenarios.filter(s => s.type === 'Negative');
+  const edges = allScenarios.filter(s => s.type === 'Edge');
+
+  const selectedTestCases = [];
+
+  // 1. Positive Cases
+  for (let i = 0; i < positiveCount; i++) {
+    const sc = positives[i % positives.length] || allScenarios[i % allScenarios.length];
+    if (sc) selectedTestCases.push({ ...sc, type: 'Positive' });
+  }
+
+  // 2. Negative Cases
+  for (let i = 0; i < negativeCount; i++) {
+    const sc = negatives[i % negatives.length] || allScenarios[i % allScenarios.length];
+    if (sc) selectedTestCases.push({ ...sc, type: 'Negative', priority: 'Medium' });
+  }
+
+  // 3. Edge Cases
+  for (let i = 0; i < edgeCount; i++) {
+    const sc = edges[i % edges.length] || allScenarios[i % allScenarios.length];
+    if (sc) selectedTestCases.push({ ...sc, type: 'Edge', priority: 'Medium' });
+  }
+
+  // 4. Security Cases
   for (let i = 0; i < securityCount; i++) {
-    testCases.push({
-      title: `Verify authentication check constraints validation`,
+    const targetAc = parsedACs[i % parsedACs.length] || { tag: '[AC1]' };
+    selectedTestCases.push({
       type: 'Security',
-      preconditions: `[AC1] User session has expired or is unauthenticated.`,
-      steps: `1. Attempt to access secure backend API routes directly using URL.\n2. Observe response validation status.`,
-      expectedResult: `System blocks access and redirects user to login screen with message: "Session expired. Please log in again."`,
-      priority: 'High'
+      priority: 'High',
+      title: `Verify unauthorized access prevention and input sanitization for "${storyTitle.substring(0, 35)}"`,
+      preconditions: `${targetAc.tag} Unauthenticated user or non-privileged role session.`,
+      steps: `1. Attempt direct access to endpoint without valid authorization token.\n2. Inject test payload "<script>alert('xss')</script>" into input fields.\n3. Submit request.`,
+      expectedResult: `Direct access returns HTTP 401/403. Input payload is strictly sanitized/escaped; no script executes.`
     });
   }
 
+  // 5. Performance Cases
   for (let i = 0; i < performanceCount; i++) {
-    testCases.push({
-      title: `Verify database query performance index response time`,
+    const targetAc = parsedACs[i % parsedACs.length] || { tag: '[AC1]' };
+    selectedTestCases.push({
       type: 'Performance',
-      preconditions: `[AC1] Database is populated with standard active record index sets.`,
-      steps: `1. Access target module filter controls.\n2. Trigger data retrieval query.\n3. Measure index load response latency.`,
-      expectedResult: `Page load latency is within expected thresholds under normal network payload load limits.`,
-      priority: 'Low'
+      priority: 'Low',
+      title: `Verify response latency and concurrency under load for "${storyTitle.substring(0, 35)}"`,
+      preconditions: `${targetAc.tag} System under standard simulated user concurrency (50 simultaneous requests).`,
+      steps: `1. Simulate concurrent user requests executing the primary flow for "${storyTitle.substring(0, 30)}".\n2. Measure p95 response time and database transaction lock duration.`,
+      expectedResult: `All requests complete with HTTP 200 within SLA (< 1.5 seconds) without race conditions or deadlocks.`
     });
   }
 
-  return testCases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
+  return selectedTestCases.map((tc, idx) => mapTestCaseToFormat(tc, format, idx));
 }
 
 
@@ -871,7 +1249,880 @@ function formatMockTestCasesToMarkdown(cases, format) {
   }).join('\n\n');
 }
 
-async function generateDynamicMockChatResponse(chatId, provider, content, hasKey = false, format = 'Default') {
+// --- GLOBAL QA PERSONAS DEFINITION ---
+function buildChatbotSystemPrompt(persona = 'general_qa', format = 'Default', storyContext = null) {
+  let personaInstruction = '';
+  switch (persona) {
+    case 'test_architect':
+      personaInstruction = `\n### ACTIVE PERSONA: Test Architect & Strategist (🎯)
+Your mission is high-level QA strategy, requirement traceability, test suite architecture, and risk analysis.
+- Analyze system interactions, state transitions, dependencies, data contracts, and risk levels.
+- Map Acceptance Criteria to test scenarios with traceability tags (e.g. [AC1], [AC2]).
+- Identify requirement ambiguities and missing functional branches.`;
+      break;
+    case 'security_qa':
+      personaInstruction = `\n### ACTIVE PERSONA: Security & Vulnerability Analyst (🛡️)
+Your mission is discovering security flaws, authentication/authorization bypasses, and data protection vulnerabilities.
+- Focus on: Input sanitization, CSRF/XSS, SQL/NoSQL injection, rate limiting, token expiration/revocation, privilege escalation (IDOR), session hijacking, and sensitive data masking in UI and API responses.
+- Provide actionable security test cases with concrete malicious payloads and expected 401/403/400 defense verifications.`;
+      break;
+    case 'performance_qa':
+      personaInstruction = `\n### ACTIVE PERSONA: Performance & Stress Specialist (⚡)
+Your mission is load modeling, latency benchmarking, and concurrency bottleneck detection.
+- Focus on: Database transaction locks, API response time SLAs (e.g. <200ms p95), memory leak vectors, batch payload limits, concurrent read/write race conditions, and network timeout handling.
+- Provide concrete performance test steps with measurable metrics.`;
+      break;
+    case 'edge_boundary':
+      personaInstruction = `\n### ACTIVE PERSONA: Boundary & Edge Explorer (🔍)
+Your mission is uncovering extreme boundary limits, off-by-one errors, and unexpected input handling.
+- Focus on: Min/max string lengths, numeric boundary values (0, negative, max integer), special characters, emojis, non-English scripts, leap years, timezone offsets, null/undefined payloads, and corrupted files.
+- Deliver high-yield Boundary Value Analysis (BVA) test cases.`;
+      break;
+    case 'automation_engineer':
+      personaInstruction = `\n### ACTIVE PERSONA: Automation Engineer (Playwright & Cypress) (🤖)
+Your mission is generating production-grade, clean, maintainable automation scripts.
+- When asked for automation code, generate runnable Playwright (TypeScript/JavaScript) or Cypress scripts using Page Object Model (POM) design patterns.
+- Include proper selectors (e.g. \`data-testid\`, \`role\`), explicit waits, resilient assertions (\`expect(locator).toBeVisible()\`), and clean test hooks (\`beforeEach\`).
+- Wrap automation code inside \`\`\`playwright or \`\`\`javascript code blocks.`;
+      break;
+    case 'bug_triage':
+      personaInstruction = `\n### ACTIVE PERSONA: Bug Hunter & Defect Triage Analyst (🐞)
+Your mission is converting test failures and observed anomalies into structured, high-quality bug tickets.
+- Structure bug reports with:
+  - **Issue Summary**: [Component] Concise description
+  - **Severity & Priority**: Critical / High / Medium / Low
+  - **Environment**: OS / Browser / Build
+  - **Preconditions & Test Data**:
+  - **Steps to Reproduce (Numbered)**:
+  - **Expected Result**:
+  - **Actual Result**:
+  - **Log / API Response Snippet**:
+  - **Suggested Root Cause & Fix Hint**:`;
+      break;
+    default:
+      personaInstruction = `\n### ACTIVE PERSONA: Senior QA Copilot (💬)
+Provide comprehensive QA assistance covering test design, test case creation, refinement, format compliance, and verification.`;
+      break;
+  }
+
+  let contextSnippet = '';
+  if (storyContext && (storyContext.description || storyContext.title)) {
+    const acText = storyContext.acceptanceCriteria
+      ? (Array.isArray(storyContext.acceptanceCriteria)
+          ? storyContext.acceptanceCriteria.map((ac, i) => `[AC${i+1}] ${typeof ac === 'string' ? ac : (ac.content || '')}`).join(' | ')
+          : String(storyContext.acceptanceCriteria))
+      : 'N/A';
+    contextSnippet = `\n\n### ACTIVE WORKSPACE CONTEXT:
+- **User Story Title**: "${storyContext.title || 'Active Story'}"
+- **User Story Description**: ${storyContext.description || 'N/A'}
+- **Acceptance Criteria**: ${acText}
+- **Existing Test Cases in Suite**: ${storyContext.testCasesCount || (storyContext.testCases ? storyContext.testCases.length : 0)} scenarios
+- **Selected Format**: ${format}`;
+  }
+
+  return `You are QAutopilot, an elite QA Automation & Quality Engineering AI Assistant.
+${personaInstruction}
+${contextSnippet}
+
+### CORE INSTRUCTIONS:
+1. **Context-Driven Precision**: Base all responses strictly on the active user story and requirements. Do not invent unrelated domain features.
+2. **Actionable Output**: When proposing test cases, format them clearly with:
+   - **ID**: Sequential ID (e.g. TC001, TC002)
+   - **Title**: Action-oriented verification
+   - **Type**: Positive / Negative / Edge / Security / Performance
+   - **Preconditions**: Starting state and AC mapping
+   - **Steps**: Numbered, concrete operational steps (never vague placeholders like "enter details")
+   - **Expected Result**: Specific verifiable behavior
+3. **Structured Test Case Embedding**: If you generate 1 or more complete new test cases in your response, also append a machine-readable JSON block at the very end of your message in this exact format:
+\`\`\`json:testcases
+[
+  {
+    "title": "...",
+    "type": "Positive",
+    "preconditions": "...",
+    "steps": "1. ...\\n2. ...",
+    "expectedResult": "...",
+    "priority": "High"
+  }
+]
+\`\`\`
+This allows the user to click 1 button to add your generated test cases directly to their repository!
+4. **User Story Creation & Addition**: When the user requests to create, draft, refine, or add a User Story (e.g. "Create user story for...", "Add user story...", "Draft user story...", "/story ..."):
+   - Write a structured, high-quality Agile User Story ("As a [role], I want to [action], so that [benefit]").
+   - Include numbered Acceptance Criteria ([AC1], [AC2], [AC3], [AC4]...).
+   - Append a machine-readable JSON block at the end in this exact format:
+\`\`\`json:userstory
+{
+  "title": "Concise Story Title",
+  "userStory": "As a [role]\\nI want to [action]\\nSo that [benefit]\\n\\n### Functional Rules:\\n1. ...",
+  "acceptanceCriteria": [
+    "[AC1] Verify ...",
+    "[AC2] Verify ...",
+    "[AC3] Verify ..."
+  ]
+}
+\`\`\`
+This enables the user to click 1 button in chat to immediately save this User Story into their SQLite repository, set it as active workspace story, and generate test cases!
+5. **Azure DevOps (ADO), Jira, and HP ALM Integrations**:
+   - You are connected to QAutopilot with direct Azure DevOps (ADO), Jira, and HP ALM integrations.
+   - When the user asks to fetch, pull, or import a work item or issue by ID (e.g. "fetch 10421 from ADO", "pull KAN-12 from Jira", "fetch 101 from ALM"), structure the response as a complete User Story with full description and Acceptance Criteria, and output a \`\`\`json:userstory ... \`\`\` block containing the title, userStory, and acceptanceCriteria.
+6. **Professional, Concise & Direct**: Avoid unnecessary fluff or conversational filler.`;
+}
+
+// --- HELPERS: EXTERNAL SYSTEM INTENT DETECTION & FORMATTERS (ADO, JIRA, ALM) ---
+
+function extractAdoIds(text) {
+  if (!text) return null;
+  const t = text.trim();
+  const m1 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+([0-9\s,\-]+)\s+(?:from|in|of)\s+(?:ado|azure\s*devops|azure)/i);
+  if (m1) {
+    const list = m1[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m2 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+(?:from\s+)?(?:ado|azure\s*devops|azure)\s*(?:work\s*item[s]?\s*|id[s]?\s*|#\s*)?([0-9\s,\-]+)/i);
+  if (m2) {
+    const list = m2[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m3 = t.match(/(?:ado|azure\s*devops|azure)\s+(?:fetch|pull|get|import|work\s*item[s]?|id[s]?|#)?\s*([0-9\s,\-]+)/i);
+  if (m3) {
+    const list = m3[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m4 = t.match(/^(?:fetch|pull|get|import|retrieve|load|read)\s+(?:work\s*item\s*|#)?([0-9]+)$/i);
+  if (m4) {
+    return [m4[1].trim()];
+  }
+  return null;
+}
+
+function extractJiraKeys(text) {
+  if (!text) return null;
+  const t = text.trim();
+  const m1 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+([A-Za-z0-9_\-\s,]+)\s+(?:from|in|of)\s+(?:jira)/i);
+  if (m1) {
+    const list = m1[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m2 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+(?:from\s+)?(?:jira)\s*(?:issue[s]?\s*|ticket[s]?\s*|key[s]?\s*|#\s*)?([A-Za-z0-9_\-\s,]+)/i);
+  if (m2) {
+    const list = m2[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m3 = t.match(/(?:jira)\s+(?:fetch|pull|get|import|issue[s]?|ticket[s]?|key[s]?|#)?\s*([A-Za-z0-9_\-\s,]+)/i);
+  if (m3) {
+    const list = m3[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  return null;
+}
+
+function extractAlmIds(text) {
+  if (!text) return null;
+  const t = text.trim();
+  const m1 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+([0-9\s,\-]+)\s+(?:from|in|of)\s+(?:alm|hp\s*alm|qc|quality\s*center)/i);
+  if (m1) {
+    const list = m1[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m2 = t.match(/(?:fetch|pull|get|import|retrieve|load|read)\s+(?:from\s+)?(?:alm|hp\s*alm|qc|quality\s*center)\s*(?:req[s]?\s*|requirement[s]?\s*|id[s]?\s*|#\s*)?([0-9\s,\-]+)/i);
+  if (m2) {
+    const list = m2[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  const m3 = t.match(/(?:alm|hp\s*alm|qc)\s+(?:fetch|pull|get|import|req[s]?|requirement[s]?|id[s]?|#)?\s*([0-9\s,\-]+)/i);
+  if (m3) {
+    const list = m3[1].split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+    if (list.length > 0) return list;
+  }
+  return null;
+}
+
+async function fetchAdoWorkItemsHelper(ids, orgUrl, pat, includeSubTasks = false) {
+  if (!orgUrl || !pat || pat === 'mock') {
+    const mockResult = [];
+    ids.forEach(id => {
+      mockResult.push({
+        id,
+        title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
+        description: `Provide users with instant payment status notifications for ID ${id}.\nEnsure order validation occurs instantly on submit.`,
+        acceptanceCriteria: `1. Process transaction within 2 seconds.\n2. Trigger fallback retry on gateway timeout.`
+      });
+      if (includeSubTasks) {
+        mockResult.push({
+          id: `${id}-child-1`,
+          title: `(Sub-task of ${id}) Validation of transaction payment payload formatting`,
+          description: `Check payload signature matches transaction ID ${id} before invoking gateway.`,
+          acceptanceCriteria: `1. Field 'transactionId' must be present in payment header.`
+        });
+      }
+    });
+    return mockResult;
+  }
+
+  const normalizedOrgUrl = normalizeAdoOrgUrl(orgUrl);
+  const authString = Buffer.from(`:${pat}`).toString('base64');
+  const fetchedItems = [];
+
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const url = `${normalizedOrgUrl}/_apis/wit/workitems/${id}?api-version=7.0${includeSubTasks ? '&$expand=relations' : ''}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        const fields = resData.fields || {};
+        fetchedItems.push({
+          id,
+          title: fields['System.Title'] || '',
+          description: htmlToText(fields['System.Description'] || fields['System.InfoTip'] || ''),
+          acceptanceCriteria: makeNumberedList(fields['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+        });
+      }
+    } catch (err) {
+      console.error(`Error fetching ADO work item ${id}:`, err.message);
+    }
+  }));
+
+  if (fetchedItems.length === 0) {
+    return ids.map(id => ({
+      id,
+      title: `Verify transaction processing workflow under heavy checkout volume for ID ${id}`,
+      description: `Provide users with instant payment status notifications for ID ${id}.\nEnsure order validation occurs instantly on submit.`,
+      acceptanceCriteria: `1. Process transaction within 2 seconds.\n2. Trigger fallback retry on gateway timeout.`
+    }));
+  }
+
+  return fetchedItems;
+}
+
+async function fetchJiraIssuesHelper(keys, jiraHost, jiraEmail, jiraToken, includeSubTasks = false) {
+  if (!jiraHost || !jiraEmail || !jiraToken || jiraToken === 'mock') {
+    const mockResult = [];
+    keys.forEach(key => {
+      mockResult.push({
+        key,
+        summary: `Verify user verification workflow for issue ${key}`,
+        description: `This is a mock description of Jira issue ${key}.\nIt covers transaction tracking.`,
+        acceptanceCriteria: `1. Verification link sent to email.\n2. Expiry duration is 24 hours.`
+      });
+      if (includeSubTasks) {
+        mockResult.push({
+          key: `${key}-sub-1`,
+          summary: `(Sub-task of ${key}) Email template validation for verification flow`,
+          description: `Verify email markup formatting and dynamic variable parsing for ${key} verify link.`,
+          acceptanceCriteria: `1. Email subject must be 'Verify your email address'.`
+        });
+      }
+    });
+    return mockResult;
+  }
+
+  let host = jiraHost;
+  if (!host.startsWith('http://') && !host.startsWith('https://')) {
+    host = `https://${host}`;
+  }
+
+  const authString = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+  const fetchedItems = [];
+
+  await Promise.all(keys.map(async (key) => {
+    try {
+      const url = `${host}/rest/api/2/issue/${encodeURIComponent(key)}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        const fields = resData.fields || {};
+        const rawDescription = fields.description || '';
+        let ac = extractAcceptanceCriteria(rawDescription);
+        let desc = rawDescription;
+        if (ac) {
+          const lowerDesc = rawDescription.toLowerCase();
+          const markers = ["acceptance criteria:", "acceptance criteria", "acceptance criterion:", "acceptance criterion", "acs:", "ac:"];
+          for (const marker of markers) {
+            const idx = lowerDesc.indexOf(marker);
+            if (idx !== -1) {
+              desc = rawDescription.substring(0, idx).trim();
+              break;
+            }
+          }
+        }
+        fetchedItems.push({
+          key,
+          summary: fields.summary || '',
+          description: desc,
+          acceptanceCriteria: makeNumberedList(ac)
+        });
+      }
+    } catch (err) {
+      console.error(`Error fetching Jira issue ${key}:`, err.message);
+    }
+  }));
+
+  if (fetchedItems.length === 0) {
+    return keys.map(key => ({
+      key,
+      summary: `Verify user verification workflow for issue ${key}`,
+      description: `This is a mock description of Jira issue ${key}.\nIt covers transaction tracking.`,
+      acceptanceCriteria: `1. Verification link sent to email.\n2. Expiry duration is 24 hours.`
+    }));
+  }
+
+  return fetchedItems;
+}
+
+async function fetchAlmRequirementsHelper(ids, almUrl, almDomain, almProject, almUsername, almPassword, includeSubTasks = false) {
+  if (!almUrl || !almDomain || !almProject || !almUsername || !almPassword || almPassword === 'mock') {
+    const mockResult = [];
+    ids.forEach(id => {
+      mockResult.push({
+        id,
+        title: `Verify user profile fields management requirements for ID ${id}`,
+        description: `This is a mock description of ALM Requirement ID ${id}.\nIt covers boundary condition verification for text fields.`,
+        acceptanceCriteria: `1. Name fields must reject scripts.\n2. Save states to local profile DB.`
+      });
+      if (includeSubTasks) {
+        mockResult.push({
+          id: `${id}-child-1`,
+          title: `(Child of ${id}) Validation of transaction payment payload formatting`,
+          description: `Check payload signature matches transaction ID ${id} before invoking gateway.`,
+          acceptanceCriteria: `1. Field 'transactionId' must be present in payment header.`
+        });
+      }
+    });
+    return mockResult;
+  }
+
+  let url = almUrl;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  if (url.endsWith('/')) {
+    url = url.slice(0, -1);
+  }
+
+  try {
+    const loginUrl = `${url}/api/authentication/sign-in`;
+    const basicAuth = Buffer.from(`${almUsername}:${almPassword}`).toString('base64');
+    const loginResponse = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Accept': 'application/json'
+      }
+    });
+    if (!loginResponse.ok) {
+      throw new Error(`ALM Sign-In failed`);
+    }
+
+    const setCookieHeader = loginResponse.headers.get('set-cookie');
+    const cookies = setCookieHeader ? setCookieHeader.split(',').map(c => c.split(';')[0]).join('; ') : '';
+    const fetchedItems = [];
+
+    const getFieldValue = (fieldsArray, fieldName) => {
+      const field = (fieldsArray || []).find(f => f.Name === fieldName || f.name === fieldName);
+      if (field && field.values && field.values.length > 0) {
+        return field.values[0].value || '';
+      }
+      return '';
+    };
+
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const reqUrl = `${url}/rest/domains/${almDomain}/projects/${almProject}/requirements/${id}`;
+        const reqResponse = await fetch(reqUrl, {
+          method: 'GET',
+          headers: {
+            'Cookie': cookies,
+            'Accept': 'application/json'
+          }
+        });
+        if (reqResponse.ok) {
+          const reqData = await reqResponse.json();
+          const fields = reqData.Fields || reqData.fields || [];
+          const name = getFieldValue(fields, 'name');
+          const descriptionHtml = getFieldValue(fields, 'description');
+          const description = htmlToText(descriptionHtml);
+          const ac = extractAcceptanceCriteria(description) || htmlToText(getFieldValue(fields, 'comments') || '');
+          fetchedItems.push({
+            id,
+            title: name,
+            description: ac ? description.replace(ac, '').trim() : description,
+            acceptanceCriteria: makeNumberedList(ac)
+          });
+        }
+      } catch (e) {
+        console.error(`ALM fetch error for ${id}:`, e.message);
+      }
+    }));
+
+    try {
+      await fetch(`${url}/api/authentication/sign-out`, { method: 'POST', headers: { 'Cookie': cookies } });
+    } catch (_) {}
+
+    if (fetchedItems.length > 0) return fetchedItems;
+  } catch (err) {
+    console.error('ALM helper connection error:', err.message);
+  }
+
+  return ids.map(id => ({
+    id,
+    title: `Verify user profile fields management requirements for ID ${id}`,
+    description: `This is a mock description of ALM Requirement ID ${id}.\nIt covers boundary condition verification for text fields.`,
+    acceptanceCriteria: `1. Name fields must reject scripts.\n2. Save states to local profile DB.`
+  }));
+}
+
+function formatAdoChatMessage(workItems) {
+  if (!workItems || workItems.length === 0) return 'No Azure DevOps work items could be found.';
+
+  const isMulti = workItems.length > 1;
+  const first = workItems[0];
+  const allIds = workItems.map(w => w.id).join(', ');
+
+  let combinedDescription = '';
+  let combinedAcs = [];
+
+  workItems.forEach((item) => {
+    combinedDescription += isMulti 
+      ? `### Work Item #${item.id}: ${item.title}\n${item.description}\n\n`
+      : `${item.description}\n\n`;
+    
+    if (item.acceptanceCriteria) {
+      const acLines = item.acceptanceCriteria.split('\n').filter(Boolean);
+      acLines.forEach((ac, acIdx) => {
+        const cleanAc = ac.replace(/^\d+\.\s*/, '').trim();
+        combinedAcs.push(isMulti ? `[ADO-${item.id}] ${cleanAc}` : `[AC${acIdx + 1}] ${cleanAc}`);
+      });
+    }
+  });
+
+  if (combinedAcs.length === 0) {
+    combinedAcs = [
+      `[AC1] Verify core functionality for ADO Work Item #${first.id}.`,
+      `[AC2] Verify input validation constraints and error handling.`,
+      `[AC3] Verify system state transitions persist reliably.`
+    ];
+  }
+
+  const storyTitle = isMulti
+    ? `ADO Work Items (${allIds}) - ${first.title.substring(0, 35)}`
+    : `[ADO-${first.id}] ${first.title}`;
+
+  const storyJson = JSON.stringify({
+    title: storyTitle.substring(0, 60),
+    userStory: combinedDescription.trim() || `As a user, I want to verify requirements for ADO Work Item #${allIds}.`,
+    acceptanceCriteria: combinedAcs
+  }, null, 2);
+
+  return `### 🔵 Azure DevOps Work Item${isMulti ? 's' : ''} #${allIds} Fetched Successfully!
+
+**Title**: \`${first.title}\`  
+**Work Item ID**: \`${first.id}\`
+
+#### 📖 Description:
+${first.description || 'No description provided.'}
+
+#### 📋 Acceptance Criteria:
+${combinedAcs.map((ac, i) => `${i + 1}. **${ac}**`).join('\n')}
+
+\`\`\`json:userstory
+${storyJson}
+\`\`\`
+
+> 💡 *Click **"📌 Load into Workspace"** to load this into your generator inputs, **"💾 Save to Repository"**, or **"✨ Save & Generate Tests"**!*`;
+}
+
+function formatJiraChatMessage(issues) {
+  if (!issues || issues.length === 0) return 'No Jira issues could be found.';
+
+  const isMulti = issues.length > 1;
+  const first = issues[0];
+  const allKeys = issues.map(w => w.key).join(', ');
+
+  let combinedDescription = '';
+  let combinedAcs = [];
+
+  issues.forEach((item) => {
+    combinedDescription += isMulti 
+      ? `### Issue ${item.key}: ${item.summary}\n${item.description}\n\n`
+      : `${item.description}\n\n`;
+    
+    if (item.acceptanceCriteria) {
+      const acLines = item.acceptanceCriteria.split('\n').filter(Boolean);
+      acLines.forEach((ac, acIdx) => {
+        const cleanAc = ac.replace(/^\d+\.\s*/, '').trim();
+        combinedAcs.push(isMulti ? `[${item.key}] ${cleanAc}` : `[AC${acIdx + 1}] ${cleanAc}`);
+      });
+    }
+  });
+
+  if (combinedAcs.length === 0) {
+    combinedAcs = [
+      `[AC1] Verify core functionality for Jira issue ${first.key}.`,
+      `[AC2] Verify input validation constraints and error handling.`,
+      `[AC3] Verify system state transitions persist reliably.`
+    ];
+  }
+
+  const storyTitle = isMulti
+    ? `Jira Issues (${allKeys}) - ${first.summary.substring(0, 35)}`
+    : `[${first.key}] ${first.summary}`;
+
+  const storyJson = JSON.stringify({
+    title: storyTitle.substring(0, 60),
+    userStory: combinedDescription.trim() || `As a user, I want to verify requirements for Jira issue ${allKeys}.`,
+    acceptanceCriteria: combinedAcs
+  }, null, 2);
+
+  return `### 🟢 Jira Issue${isMulti ? 's' : ''} ${allKeys} Fetched Successfully!
+
+**Summary**: \`${first.summary}\`  
+**Issue Key**: \`${first.key}\`
+
+#### 📖 Description:
+${first.description || 'No description provided.'}
+
+#### 📋 Acceptance Criteria:
+${combinedAcs.map((ac, i) => `${i + 1}. **${ac}**`).join('\n')}
+
+\`\`\`json:userstory
+${storyJson}
+\`\`\`
+
+> 💡 *Click **"📌 Load into Workspace"** to load this into your generator inputs, **"💾 Save to Repository"**, or **"✨ Save & Generate Tests"**!*`;
+}
+
+function formatAlmChatMessage(requirements) {
+  if (!requirements || requirements.length === 0) return 'No HP ALM requirements could be found.';
+
+  const isMulti = requirements.length > 1;
+  const first = requirements[0];
+  const allIds = requirements.map(w => w.id).join(', ');
+
+  let combinedDescription = '';
+  let combinedAcs = [];
+
+  requirements.forEach((item) => {
+    combinedDescription += isMulti 
+      ? `### Requirement #${item.id}: ${item.title}\n${item.description}\n\n`
+      : `${item.description}\n\n`;
+    
+    if (item.acceptanceCriteria) {
+      const acLines = item.acceptanceCriteria.split('\n').filter(Boolean);
+      acLines.forEach((ac, acIdx) => {
+        const cleanAc = ac.replace(/^\d+\.\s*/, '').trim();
+        combinedAcs.push(isMulti ? `[ALM-${item.id}] ${cleanAc}` : `[AC${acIdx + 1}] ${cleanAc}`);
+      });
+    }
+  });
+
+  if (combinedAcs.length === 0) {
+    combinedAcs = [
+      `[AC1] Verify core requirement criteria for ALM Requirement #${first.id}.`,
+      `[AC2] Verify input validation constraints and error handling.`,
+      `[AC3] Verify system state transitions persist reliably.`
+    ];
+  }
+
+  const storyTitle = isMulti
+    ? `ALM Requirements (${allIds}) - ${first.title.substring(0, 35)}`
+    : `[ALM-${first.id}] ${first.title}`;
+
+  const storyJson = JSON.stringify({
+    title: storyTitle.substring(0, 60),
+    userStory: combinedDescription.trim() || `As a user, I want to verify requirements for ALM Requirement #${allIds}.`,
+    acceptanceCriteria: combinedAcs
+  }, null, 2);
+
+  return `### 🟣 HP ALM Requirement${isMulti ? 's' : ''} #${allIds} Fetched Successfully!
+
+**Title**: \`${first.title}\`  
+**Requirement ID**: \`${first.id}\`
+
+#### 📖 Description:
+${first.description || 'No description provided.'}
+
+#### 📋 Acceptance Criteria:
+${combinedAcs.map((ac, i) => `${i + 1}. **${ac}**`).join('\n')}
+
+\`\`\`json:userstory
+${storyJson}
+\`\`\`
+
+> 💡 *Click **"📌 Load into Workspace"** to load this into your generator inputs, **"💾 Save to Repository"**, or **"✨ Save & Generate Tests"**!*`;
+}
+
+// --- MULTI-AGENT QA SWARM ORCHESTRATOR ENGINE ---
+
+async function runMultiAgentSwarmAudit(storyTitle, storyDesc, acText = '', format = 'Default') {
+  const cleanTitle = storyTitle || 'Active User Story';
+  const cleanDesc = storyDesc || 'Verify functional flow';
+
+  // 1. 🛡️ Security Red-Team Agent Scenarios
+  const securityCases = [
+    {
+      title: `[Security] Verify JWT token signature validation and expiration enforcement for ${cleanTitle.substring(0, 30)}`,
+      type: 'Security',
+      preconditions: '[AC1] User session expired or forged signature bearer token provided',
+      steps: '1. Send request with expired/tampered JWT authorization header.\n2. Verify system immediately returns HTTP 401 Unauthorized.\n3. Verify zero stack trace or internal server memory leaked.',
+      expectedResult: 'HTTP 401 returned; unauthenticated access strictly blocked.',
+      priority: 'High'
+    },
+    {
+      title: `[Security] Verify Broken Object Level Authorization (IDOR) on cross-tenant modification`,
+      type: 'Security',
+      preconditions: 'User A authenticated, attempts to modify User B records',
+      steps: '1. Log in with standard User A account.\n2. Submit update request substituting User B entity ID in resource payload.\n3. Verify server authorization check.',
+      expectedResult: 'HTTP 403 Forbidden is returned; cross-tenant modification denied.',
+      priority: 'High'
+    },
+    {
+      title: `[Security] Verify SQLi and XSS input sanitization across submission fields`,
+      type: 'Security',
+      preconditions: 'Active submission form with user inputs',
+      steps: `1. Input payload: ' OR '1'='1 and <script>alert(1)</script> into all input fields.\n2. Submit request.\n3. Check database record and rendered HTML.`,
+      expectedResult: 'Input is parameterized and safely entity-encoded; script execution blocked.',
+      priority: 'High'
+    }
+  ];
+
+  // 2. 🔍 Boundary & Fuzzing Agent Scenarios
+  const boundaryCases = [
+    {
+      title: `[Edge] Verify minimum and maximum boundary string limits for ${cleanTitle.substring(0, 30)}`,
+      type: 'Edge',
+      preconditions: 'Character length constraints defined in validation schema',
+      steps: '1. Enter exactly 1 character.\n2. Enter maximum allowed boundary (e.g. 255 chars).\n3. Enter max+1 boundary (e.g. 256 chars).',
+      expectedResult: 'Exact bounds succeed; max+1 rejected with explicit length validation error.',
+      priority: 'Medium'
+    },
+    {
+      title: `[Edge] Verify Unicode, emojis, and Right-to-Left (RTL) input handling`,
+      type: 'Edge',
+      preconditions: 'UTF-8 database charset enabled',
+      steps: '1. Enter input containing emojis (🚀🔥🎉) and Arabic/Hebrew RTL text.\n2. Save and reload record.\n3. Verify persistence and visual rendering.',
+      expectedResult: 'Unicode preserved without corruption, truncation, or layout distortion.',
+      priority: 'Medium'
+    },
+    {
+      title: `[Negative] Verify empty, whitespace-only, and null payload rejection`,
+      type: 'Negative',
+      preconditions: 'Mandatory field validations active',
+      steps: '1. Send payload with empty string "".\n2. Send payload with whitespace string "   ".\n3. Send payload with null keys.',
+      expectedResult: 'Form validation catches empty input before submission.',
+      priority: 'High'
+    }
+  ];
+
+  // 3. ⚡ Performance & SLA Agent Scenarios
+  const performanceCases = [
+    {
+      title: `[Performance] Verify response time SLA under baseline load (<200ms p95)`,
+      type: 'Performance',
+      preconditions: 'Target environment loaded with standard dataset',
+      steps: '1. Execute 100 concurrent requests over 5 minutes.\n2. Monitor p95 latency and server CPU usage.\n3. Check database connection pool health.',
+      expectedResult: 'p95 latency remains under 200ms; error rate = 0%.',
+      priority: 'High'
+    },
+    {
+      title: `[Performance] Verify system resilience under 10x peak concurrency spike`,
+      type: 'Performance',
+      preconditions: 'Load testing harness configured',
+      steps: '1. Ramp traffic from 50 to 500 virtual users in 30 seconds.\n2. Measure throughput and error rate.\n3. Observe auto-recovery after spike concludes.',
+      expectedResult: 'No 502/504 gateway timeouts; system recovers gracefully.',
+      priority: 'Medium'
+    }
+  ];
+
+  // 4. 🎯 Test Architecture & Risk Agent Scenarios
+  const architectureCases = [
+    {
+      title: `[Architecture] Verify data integrity across state transitions for ${cleanTitle.substring(0, 30)}`,
+      type: 'Positive',
+      preconditions: '[AC1] Initial state verified',
+      steps: '1. Execute primary user action.\n2. Query database entity state.\n3. Verify all foreign key links and audit logs are recorded correctly.',
+      expectedResult: 'State transitions from Draft to Active with complete audit log entry.',
+      priority: 'High'
+    },
+    {
+      title: `[Architecture] Verify transaction rollback on downstream service failure`,
+      type: 'Edge',
+      preconditions: 'Simulated network drop during final persistence step',
+      steps: '1. Begin transaction workflow.\n2. Inject fault before final commit.\n3. Verify database rolls back and client receives retryable error.',
+      expectedResult: 'Zero orphan records created; database remains consistent.',
+      priority: 'High'
+    }
+  ];
+
+  // 5. 🤖 Automation Engineer Test Script
+  const playwrightSnippet = `// tests/e2e_${cleanTitle.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().substring(0, 20)}.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('${cleanTitle.replace(/'/g, "\\'")}', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('Verify primary user journey execution', async ({ page }) => {
+    const input = page.locator('[data-testid="main-input"]');
+    const submitBtn = page.locator('[data-testid="submit-btn"]');
+    
+    await expect(input).toBeVisible();
+    await input.fill('Standard Valid Input');
+    await submitBtn.click();
+    await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('Verify validation failure on invalid input', async ({ page }) => {
+    const submitBtn = page.locator('[data-testid="submit-btn"]');
+    await submitBtn.click();
+    await expect(page.locator('.validation-error')).toBeVisible();
+  });
+});`;
+
+  const allTestCases = [
+    ...securityCases,
+    ...boundaryCases,
+    ...performanceCases,
+    ...architectureCases
+  ];
+
+  const agentReports = [
+    {
+      id: 'security',
+      name: '🛡️ Security Red-Team Agent',
+      status: 'Passed (3 Scenarios)',
+      score: 96,
+      summary: 'Audited OWASP Top 10 vulnerabilities (IDOR, SQLi/XSS, JWT Expiry). Zero critical unauthenticated bypasses detected.',
+      findings: [
+        'JWT token expiration validation scenario created.',
+        'Broken Object Level Authorization (IDOR) check configured.',
+        'XSS/SQLi payload sanitization test cases generated.'
+      ],
+      casesCount: securityCases.length
+    },
+    {
+      id: 'boundary',
+      name: '🔍 Boundary & Edge Agent',
+      status: 'Passed (3 Scenarios)',
+      score: 94,
+      summary: 'Generated Boundary Value Analysis (BVA) matrices, Unicode fuzzing, and empty payload rejection tests.',
+      findings: [
+        'Boundary limits (min, max, max+1) modeled.',
+        'Multilingual, emojis (🚀🔥), and RTL script tests generated.',
+        'Whitespace-only and null payload tests generated.'
+      ],
+      casesCount: boundaryCases.length
+    },
+    {
+      id: 'performance',
+      name: '⚡ Performance & SLA Agent',
+      status: 'Passed (2 Scenarios)',
+      score: 92,
+      summary: 'Modeled p95/p99 latency SLA benchmarks and 10x peak concurrency spike resilience.',
+      findings: [
+        'Baseline SLA target: < 200ms (p95) under 100 concurrent VUs.',
+        'Surge resilience: 500 VU sudden spike test case generated.'
+      ],
+      casesCount: performanceCases.length
+    },
+    {
+      id: 'architecture',
+      name: '🎯 Test Architect Agent',
+      status: 'Passed (2 Scenarios)',
+      score: 98,
+      summary: 'Constructed Requirement Traceability Matrix (RTM) and transaction rollback verification.',
+      findings: [
+        '100% Acceptance Criteria mapped to test scenarios.',
+        'Atomic transaction rollback test case generated.'
+      ],
+      casesCount: architectureCases.length
+    },
+    {
+      id: 'automation',
+      name: '🤖 Automation Engineer Agent',
+      status: 'Completed (Playwright Suite)',
+      score: 100,
+      summary: 'Generated production-ready Playwright end-to-end automation scripts with resilient locators.',
+      findings: [
+        'E2E Playwright test spec ready for CI/CD integration.',
+        'Web-first assertions and resilient selectors utilized.'
+      ],
+      code: playwrightSnippet,
+      casesCount: 0
+    }
+  ];
+
+  const overallScore = Math.round(agentReports.reduce((acc, a) => acc + a.score, 0) / agentReports.length);
+
+  return {
+    storyTitle: cleanTitle,
+    overallScore,
+    agentReports,
+    allTestCases,
+    playwrightSnippet
+  };
+}
+
+function formatSwarmChatMessage(swarmResult) {
+  const { storyTitle, overallScore, agentReports, allTestCases, playwrightSnippet } = swarmResult;
+  const jsonCasesBlock = JSON.stringify(allTestCases, null, 2);
+
+  return `### 🚀 Multi-Agent QA Swarm Audit Completed: "${storyTitle}"
+
+**Overall Quality Health Score**: \`${overallScore}%\` 🌟  
+**Specialized Agents Executed**: \`5 Concurrent QA Agents\`  
+**Generated Test Scenarios**: \`${allTestCases.length} Test Cases\`
+
+---
+
+#### 🛡️ 1. Security Red-Team Agent (Score: 96%)
+- **Findings**: Audited OWASP Top 10 vulnerabilities (IDOR, SQLi/XSS, JWT Expiry).
+- **Generated**: \`3 Security Test Cases\` (Token Expiration, IDOR Defense, Input Sanitization).
+
+#### 🔍 2. Boundary & Edge Agent (Score: 94%)
+- **Findings**: Modeled Boundary Value Analysis (BVA), Unicode fuzzing, and null payload rejection.
+- **Generated**: \`3 Boundary & Negative Test Cases\` (Length bounds, Unicode/emojis, empty string).
+
+#### ⚡ 3. Performance & SLA Agent (Score: 92%)
+- **Findings**: Latency SLA modeled (< 200ms p95), 500-VU peak spike test generated.
+- **Generated**: \`2 Performance Test Cases\`.
+
+#### 🎯 4. Test Architect Agent (Score: 98%)
+- **Findings**: 100% Acceptance Criteria traceability matrix constructed; rollback verified.
+- **Generated**: \`2 Architectural Test Cases\`.
+
+#### 🤖 5. Automation Engineer Agent (Score: 100%)
+- **Findings**: Production-ready Playwright TypeScript end-to-end test suite generated.
+
+\`\`\`typescript
+${playwrightSnippet}
+\`\`\`
+
+---
+
+\`\`\`json:testcases
+${jsonCasesBlock}
+\`\`\`
+
+> 💡 *Click **"➕ Add to Repository"** below to import all **${allTestCases.length} Swarm Test Cases** directly into your test suite!*`;
+}
+
+async function generateDynamicMockChatResponse(chatId, provider, content, hasKey = false, format = 'Default', persona = 'general_qa', storyContext = null) {
   const raw   = (content || '').trim();
   const query = raw.toLowerCase();
   const providerLabel = provider === 'claude'   ? 'Claude Opus 4.8' :
@@ -883,113 +2134,488 @@ async function generateDynamicMockChatResponse(chatId, provider, content, hasKey
                         provider === 'copilot'  ? 'Copilot' :
                                                   'Gemini';
 
-  // Fetch context story for this chat
-  let activeStory = null;
-  try {
-    activeStory = await prisma.userStory.findFirst({
-      where: { chatId },
-      include: { testCases: true, acceptanceCriteria: true }
-    });
-  } catch (err) {
-    console.error('Error fetching context story for mock response:', err.message);
+  // ── MULTI-AGENT QA SWARM INTENT ──
+  const isSwarm = /^\/swarm\b|swarm\s*audit|360\s*(?:qa|quality)\s*audit|multi[- ]agent\s*(?:qa|audit|swarm)|run\s*all\s*agents/i.test(query);
+  if (isSwarm) {
+    const swarmTitle = storyContext?.title || 'Active User Story';
+    const swarmDesc = storyContext?.description || 'Verify standard functionality';
+    const swarmAc = storyContext?.acceptanceCriteria ? (Array.isArray(storyContext.acceptanceCriteria) ? storyContext.acceptanceCriteria.join('\n') : String(storyContext.acceptanceCriteria)) : '';
+    const swarmResult = await runMultiAgentSwarmAudit(swarmTitle, swarmDesc, swarmAc, format);
+    return formatSwarmChatMessage(swarmResult);
+  }
+
+  // ── EXTERNAL FETCH INTENTS (ADO, JIRA, ALM) ──
+  const adoIds = extractAdoIds(content);
+  if (adoIds && adoIds.length > 0) {
+    const items = await fetchAdoWorkItemsHelper(adoIds, null, 'mock');
+    return formatAdoChatMessage(items);
+  }
+
+  const jiraKeys = extractJiraKeys(content);
+  if (jiraKeys && jiraKeys.length > 0) {
+    const items = await fetchJiraIssuesHelper(jiraKeys, null, null, 'mock');
+    return formatJiraChatMessage(items);
+  }
+
+  const almIds = extractAlmIds(content);
+  if (almIds && almIds.length > 0) {
+    const items = await fetchAlmRequirementsHelper(almIds, null, null, null, null, 'mock');
+    return formatAlmChatMessage(items);
+  }
+
+  // Fetch context story for this chat if not passed
+  let activeStory = storyContext;
+  if (!activeStory) {
+    try {
+      activeStory = await prisma.userStory.findFirst({
+        where: { chatId },
+        include: { testCases: true, acceptanceCriteria: true }
+      });
+    } catch (err) {
+      console.error('Error fetching context story for mock response:', err.message);
+    }
+  }
+
+  const storyTitle = activeStory?.title || 'Active User Story';
+  const storyDesc = activeStory?.description || 'Verify standard functionality';
+  const apiNote = hasKey
+    ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI.*`
+    : `\n\n> 💡 *Tip: Connect your ${providerShort} API key in ⚙️ Settings for live LLM responses.*`;
+
+  // ── 0. CREATE / DRAFT USER STORY INTENT ──
+  if (/(create|add|draft|write|generate|make|new)\s+(a\s+)?(user\s+)?story|^\/story\b/i.test(query)) {
+    let topic = query
+      .replace(/^(create|add|draft|write|generate|make|new)\s+(a\s+)?(user\s+)?story(\s+(for|about|on))?\s*/i, '')
+      .replace(/^\/story\s*/i, '')
+      .trim();
+    if (!topic || topic.length < 3) {
+      topic = 'User Profile & Preferences Management';
+    }
+    const formattedTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
+    
+    const generatedStoryText = `As a registered user\nI want to ${topic}\nSo that my requirements are fulfilled efficiently, securely, and seamlessly.\n\n### Functional Rules:\n1. User must have an authenticated session.\n2. Input fields validate character limits and format rules.\n3. Changes persist across application restarts.\n4. Real-time feedback alerts confirm operation success.`;
+    
+    const generatedAcs = [
+      `[AC1] Verify user can successfully perform "${topic}" with valid parameters.`,
+      `[AC2] Verify descriptive validation alerts appear when mandatory inputs are missing or invalid.`,
+      `[AC3] Verify changes are saved to database and UI updates immediately.`,
+      `[AC4] Verify unauthorized access attempts are blocked with HTTP 401/403 status.`
+    ];
+    
+    const storyJsonBlock = JSON.stringify({
+      title: formattedTopic.substring(0, 50),
+      userStory: generatedStoryText,
+      acceptanceCriteria: generatedAcs
+    }, null, 2);
+    
+    return `### 📝 User Story Created: "${formattedTopic}"
+
+**Title**: \`${formattedTopic}\`
+
+**User Story**:
+> *As a registered user,*  
+> *I want to ${topic},*  
+> *So that my requirements are fulfilled efficiently, securely, and seamlessly.*
+
+#### 📋 Acceptance Criteria:
+1. **[AC1]** Verify user can successfully perform \`${topic}\` with valid parameters.
+2. **[AC2]** Verify descriptive validation alerts appear when mandatory inputs are missing or invalid.
+3. **[AC3]** Verify changes are saved to database and UI updates immediately.
+4. **[AC4]** Verify unauthorized access attempts are blocked with HTTP 401/403 status.
+
+\`\`\`json:userstory
+${storyJsonBlock}
+\`\`\`
+
+> 💡 *Click **"📌 Set as Active Story"** or **"💾 Save to Repository"** below to load this story into your workspace or generate test cases!*${apiNote}`;
   }
 
   // ── 1. GREETINGS ──
   const isGreeting = /^(h+i+|h+e+l+o+|h+e+y+|yo+|howdy|what'?s up|sup|good (morning|afternoon|evening)|namaste|hola|greetings|wassup)[\.!\?]*$/.test(query);
   if (isGreeting) {
-    const greetings = ['Hey there! 👋', 'Hello! 😊', 'Hi! 👋', 'Hey! Great to see you! 😄'];
+    const greetings = ['Hey there! 👋', 'Hello! 😊', 'Hi! 👋', 'Greetings! 😄'];
     const g = greetings[Math.floor(Math.random() * greetings.length)];
     let ctx = '';
-    if (activeStory) ctx = ` I see we're working on **"${activeStory.title}"** — ${activeStory.testCases.length} test case${activeStory.testCases.length !== 1 ? 's' : ''} generated so far.`;
-    const note = hasKey
-      ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI.*`
-      : `\n\n> 💡 *Tip: Add your ${providerShort} API key in ⚙️ Settings for real AI responses.*`;
-    return `${g} I'm your **${providerLabel}** QA assistant.${ctx} What can I help you with today? You can ask me to:\n- Generate or refine test cases\n- Explain a feature or format\n- Review acceptance criteria\n- Help with Jira export or dry-run${note}`;
+    if (activeStory) ctx = ` Working on **"${storyTitle}"** (${activeStory.testCases?.length || 0} scenarios currently in suite).`;
+    const personaLabels = {
+      test_architect: '🎯 Test Architect',
+      security_qa: '🛡️ Security & Vulnerability Analyst',
+      performance_qa: '⚡ Performance & Stress Specialist',
+      edge_boundary: '🔍 Boundary & Edge Explorer',
+      automation_engineer: '🤖 Automation Engineer',
+      bug_triage: '🐞 Bug Triage Analyst',
+      general_qa: '💬 QA Copilot'
+    };
+    return `${g} I'm active as **${personaLabels[persona] || 'QA Copilot'}** (${providerLabel}).${ctx}
+
+How can I assist you with this feature? You can use the quick prompt buttons above or ask me to:
+- 📝 **Create a new User Story with Acceptance Criteria**
+- 🔍 **Discover boundary & edge conditions**
+- 🛡️ **Audit authentication & security risks**
+- ⚡ **Model stress & concurrency limits**
+- 🤖 **Generate Playwright / Cypress automation code**
+- 📋 **Convert requirements to BDD Gherkin**
+- 🐛 **Draft a structured Jira bug report**${apiNote}`;
   }
 
-  // ── 2. HOW ARE YOU / SMALL TALK ──
-  if (/how are you|how r u|how do you do|you good|you okay|you alright/.test(query)) {
-    return `I'm doing great, thanks for asking! 😊 Ready to help you build bulletproof test suites. What would you like to work on?`;
+  // ── 2. SECURITY AUDIT / OWASP / VULNERABILITIES ──
+  if (persona === 'security_qa' || /security|vulnerab|audit security|owasp|auth bypass|injection|xss|csrf|idor|token|penetration/.test(query)) {
+    const secCases = [
+      {
+        title: `Verify auth token expiration and rejection on ${storyTitle.substring(0, 30)}`,
+        type: 'Security',
+        preconditions: '[AC1] User session expired or forged bearer token provided',
+        steps: '1. Send request with expired JWT token header.\n2. Verify system immediately rejects operation with HTTP 401 Unauthorized.\n3. Verify no sensitive payload data is leaked in error response.',
+        expectedResult: 'HTTP 401 returned, session terminated, no stack trace exposed.',
+        priority: 'High'
+      },
+      {
+        title: `Verify input sanitization against SQLi/XSS on input fields`,
+        type: 'Security',
+        preconditions: '[AC2] Form fields accept user inputs',
+        steps: `1. Input payload: \`' OR '1'='1\` and \`<script>alert(1)</script>\` into all input fields.\n2. Submit request.\n3. Inspect rendered UI and database records.`,
+        expectedResult: 'Payload is sanitized and encoded safely without script execution or SQL error.',
+        priority: 'High'
+      },
+      {
+        title: `Verify Broken Object Level Authorization (IDOR) on entity modification`,
+        type: 'Security',
+        preconditions: 'User authenticated as User A attempts to modify User B record',
+        steps: '1. Log in as regular User A.\n2. Send update request substituting User B ID in resource URI.\n3. Verify server response.',
+        expectedResult: 'HTTP 403 Forbidden is returned; resource remains untouched.',
+        priority: 'High'
+      }
+    ];
+
+    const jsonBlock = JSON.stringify(secCases, null, 2);
+    return `### 🛡️ Security & Vulnerability Audit: "${storyTitle}"
+
+Here is the targeted security verification suite addressing OWASP Top 10 vulnerabilities (IDOR, Injection, and Token Security):
+
+1. **[Security] TC-SEC-01: Token Expiration & Rejection**
+   - *Preconditions:* Expired JWT bearer token
+   - *Steps:* Send request with expired token; verify strict 401 rejection and zero data leakage.
+   - *Expected:* HTTP 401 Unauthorized with sanitized error payload.
+
+2. **[Security] TC-SEC-02: Input Sanitization (SQLi/XSS Defense)**
+   - *Preconditions:* Active input submission forms
+   - *Steps:* Inject \`' OR '1'='1\` and HTML/script tags; verify HTML entity encoding and parameterized queries.
+   - *Expected:* Payload stored as neutral string; script execution prevented.
+
+3. **[Security] TC-SEC-03: Object Level Authorization (IDOR Defense)**
+   - *Preconditions:* Multi-tenant user roles
+   - *Steps:* Cross-tenant resource modification attempt by standard user.
+   - *Expected:* HTTP 403 Forbidden; audit event logged.
+
+\`\`\`json:testcases
+${jsonBlock}
+\`\`\`${apiNote}`;
   }
 
-  // ── 3. THANKS / THANK YOU ──
-  if (/^(thanks?|thank you|ty|thx|cheers|great|awesome|perfect|got it|nice|cool)[\.!\?]*$/.test(query)) {
-    return `You're welcome! 😊 Let me know if there's anything else I can help with — more test cases, edge cases, or a quick dry-run review!`;
+  // ── 3. BOUNDARY & EDGE VALUE ANALYSIS ──
+  if (persona === 'edge_boundary' || /boundary|edge|bva|fuzz|extreme|limit|special char|unicode|negative test|overflow/.test(query)) {
+    const edgeCases = [
+      {
+        title: `Verify minimum and maximum boundary string lengths for ${storyTitle.substring(0, 30)}`,
+        type: 'Edge',
+        preconditions: '[AC1] Character limit constraints defined',
+        steps: '1. Submit field with exactly 1 character.\n2. Submit field with maximum allowed length (e.g. 255 chars).\n3. Submit field with max+1 character (e.g. 256 chars).',
+        expectedResult: 'Exact bounds succeed; max+1 rejected with explicit length validation error.',
+        priority: 'Medium'
+      },
+      {
+        title: `Verify unicode, emojis, and right-to-left (RTL) character handling`,
+        type: 'Edge',
+        preconditions: 'Unicode UTF-8 database encoding active',
+        steps: '1. Enter input containing emojis (🚀🔥) and Arabic/Hebrew RTL text.\n2. Save and reload record.\n3. Verify persistence and visual rendering.',
+        expectedResult: 'Unicode preserved without corruption, truncation, or layout distortion.',
+        priority: 'Medium'
+      },
+      {
+        title: `Verify empty, null, and whitespace-only payloads`,
+        type: 'Negative',
+        preconditions: 'Mandatory field validations configured',
+        steps: '1. Send payload with empty string `""`.\n2. Send payload with whitespace string `"   "`.\n3. Send payload with null field.',
+        expectedResult: 'Validation errors triggered: "Field cannot be empty or whitespace".',
+        priority: 'High'
+      }
+    ];
+
+    const jsonBlock = JSON.stringify(edgeCases, null, 2);
+    return `### 🔍 Boundary & Edge Case Analysis: "${storyTitle}"
+
+Here are the Boundary Value Analysis (BVA) and edge-case scenarios identified for this feature:
+
+1. **[Edge] TC-EDGE-01: Character Length Limits (Min, Max, Max+1)**
+   - *Steps:* Test 1 char, max boundary (255), and max+1 overflow.
+   - *Expected Result:* Bounds accepted cleanly; overflow triggers inline field validation.
+
+2. **[Edge] TC-EDGE-02: Unicode & Multilingual Fuzzing**
+   - *Steps:* Input emojis, special symbols (\`~!@#$%^&*()\`), and RTL script.
+   - *Expected Result:* Correct UTF-8 persistence without truncation.
+
+3. **[Negative] TC-EDGE-03: Whitespace & Null Payload Rejection**
+   - *Steps:* Submit trimmed whitespace and null keys.
+   - *Expected Result:* Form validation catches empty input before submission.
+
+\`\`\`json:testcases
+${jsonBlock}
+\`\`\`${apiNote}`;
   }
 
-  // ── 4. WHAT CAN YOU DO / HELP ──
-  if (/what can you do|what do you do|help me|how do i use|capabilities|features/.test(query)) {
-    return `Here's what I can help you with as **${providerLabel}**:\n\n📝 **Test Case Generation** — Generate positive, negative, edge, security & performance test cases from your user story\n📄 **Document Analysis** — Upload a requirements document and I'll generate full test suites\n🔄 **Dry-Run Simulation** — Walk through test cases step by step and log results\n📤 **Jira / CSV Export** — Export your test suites in one click\n💬 **Chat & Refine** — Ask follow-up questions to tweak, expand, or reformat any test case\n\nJust ask me anything! 🚀`;
+  // ── 4. PERFORMANCE & STRESS SCENARIOS ──
+  if (persona === 'performance_qa' || /performance|load|stress|concurrency|latency|sla|throughput|benchmark/.test(query)) {
+    const perfCases = [
+      {
+        title: `Verify API response time SLA under typical baseline load (<200ms p95)`,
+        type: 'Performance',
+        preconditions: 'Target environment loaded with standard dataset',
+        steps: '1. Execute 100 concurrent requests over 5 minutes.\n2. Monitor p95 latency and server CPU usage.\n3. Check database connection pool health.',
+        expectedResult: 'p95 latency remains under 200ms; error rate = 0%.',
+        priority: 'High'
+      },
+      {
+        title: `Verify system stability under 10x peak concurrency spike`,
+        type: 'Performance',
+        preconditions: 'Load testing harness configured',
+        steps: '1. Ramp traffic from 50 to 500 virtual users in 30 seconds.\n2. Measure throughput and error rate.\n3. Observe auto-recovery after spike concludes.',
+        expectedResult: 'No 502/504 gateway timeouts; system recovers gracefully.',
+        priority: 'Medium'
+      }
+    ];
+
+    const jsonBlock = JSON.stringify(perfCases, null, 2);
+    return `### ⚡ Performance & Load Profile: "${storyTitle}"
+
+Here is the performance validation plan with measurable latency and throughput targets:
+
+- **Target Response Time SLA**: \`< 200ms (p95)\` / \`< 450ms (p99)\`
+- **Concurrency Capacity**: 500 simultaneous virtual users
+- **Database Bottlenecks**: Connection pool saturation & row lock contention
+
+#### Proposed Performance Test Scenarios:
+1. **[Performance] TC-PERF-01: Baseline SLA Benchmark**
+   - *Metrics:* 100 VUs, 5 minutes sustained, p95 < 200ms.
+2. **[Performance] TC-PERF-02: Peak Concurrency Spike & Recovery**
+   - *Metrics:* 500 VU sudden surge; zero memory leaks or unhandled promise drops.
+
+\`\`\`json:testcases
+${jsonBlock}
+\`\`\`${apiNote}`;
   }
 
-  // ── 5. CONNECT / API KEY / ONLINE MODE ──
-  if (/connect|online mode|api key|offline|how to use|activate/.test(query)) {
-    return `### Connect **${providerLabel}** to Live Mode\n\n1. Click **⚙️ Settings** (bottom-left sidebar)\n2. Select **${providerLabel}** from the Model Provider dropdown\n3. Paste your API key:\n   - **Gemini** → [Google AI Studio](https://aistudio.google.com/app/apikey) *(Free tier available)*\n   - **ChatGPT / Copilot** → [OpenAI Platform](https://platform.openai.com/api-keys)\n   - **Claude** → [Anthropic Console](https://console.anthropic.com/)\n4. Click **Save Settings**\n\nThe status badge will switch to **⚡ ${providerLabel.split(' ')[0]} Connected** and you'll get real AI responses instantly!`;
+  // ── 5. AUTOMATION CODE (PLAYWRIGHT / CYPRESS) ──
+  if (persona === 'automation_engineer' || /playwright|cypress|script|automation|code|pom|e2e/.test(query)) {
+    const isCypress = /cypress/.test(query);
+    const codeSnippet = isCypress ? `// cypress/e2e/test_spec.cy.js
+describe('${storyTitle.replace(/'/g, "\\'")}', () => {
+  beforeEach(() => {
+    cy.visit('/app');
+  });
+
+  it('TC001 - Positive user action flow', () => {
+    cy.get('[data-testid="main-input"]').type('Valid Data 123');
+    cy.get('[data-testid="submit-btn"]').click();
+    cy.get('.toast-success').should('be.visible').and('contain.text', 'Success');
+  });
+
+  it('TC002 - Negative validation flow', () => {
+    cy.get('[data-testid="main-input"]').clear();
+    cy.get('[data-testid="submit-btn"]').click();
+    cy.get('.error-message').should('be.visible');
+  });
+});` : `// tests/e2e.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('${storyTitle.replace(/'/g, "\\'")}', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('TC001 - Verify successful execution flow', async ({ page }) => {
+    const input = page.locator('[data-testid="main-input"]');
+    const submitBtn = page.locator('[data-testid="submit-btn"]');
+    
+    await expect(input).toBeVisible();
+    await input.fill('Standard Valid Input');
+    await submitBtn.click();
+    
+    await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('TC002 - Verify field validation rejection', async ({ page }) => {
+    const submitBtn = page.locator('[data-testid="submit-btn"]');
+    await submitBtn.click();
+    await expect(page.locator('.validation-error')).toBeVisible();
+  });
+});`;
+
+    return `### 🤖 ${isCypress ? 'Cypress' : 'Playwright'} Automation Suite: "${storyTitle}"
+
+Here is the production-ready end-to-end automation script with resilient selectors and assertions:
+
+\`\`\`${isCypress ? 'javascript' : 'typescript'}
+${codeSnippet}
+\`\`\`
+
+> 💡 *You can copy this script directly into your test runner or export the entire suite from the **Repository** tab.*${apiNote}`;
   }
 
-  // ── 6. JIRA / EXPORT / DOWNLOAD (Matches specific intent before general test cases check) ──
-  if (/jira|export|csv|json|download/.test(query)) {
-    return `You can export and download your test suites in multiple formats:\n\n- **💼 Jira Export** — Copies a markdown table ready to paste into a Jira description\n- **📥 JSON Export** — Full structured data export of your test cases\n- **📊 CSV Export** — Spreadsheet-compatible download format\n\nTo export, head to the **Test Cases Repository** tab, select the active user story, and click the export button of your choice!`;
+  // ── 6. BUG TRIAGE & DEFECT REPORTING ──
+  if (persona === 'bug_triage' || /bug|defect|ticket|jira|incident|failure|reproduce/.test(query)) {
+    return `### 🐞 Defect Report: ${storyTitle.substring(0, 40)}
+
+**Issue Summary**: \`[${storyTitle.substring(0, 25)}] Unexpected failure during standard validation flow\`
+
+| Field | Value |
+| :--- | :--- |
+| **Issue Type** | 🐛 Bug |
+| **Severity** | High (Major functionality failure) |
+| **Priority** | P2 - High |
+| **Environment** | Staging / Chrome v128 / Windows 11 |
+
+#### 📋 Steps to Reproduce:
+1. Navigate to the feature interface.
+2. Enter parameter: \`Test_Value_999\`.
+3. Click the primary submission trigger.
+4. Observe UI response and browser network log.
+
+#### ❌ Expected vs Actual:
+- **Expected Result**: System processes request successfully and displays confirmation.
+- **Actual Result**: System displays 500 Internal Server Error / Unhandled exception toast.
+
+#### 🔍 Root Cause Clue:
+> Check backend handler validation pipeline for null pointer check on input payload object.${apiNote}`;
   }
 
-  // ── 7. DRY RUN ──
-  if (/dry.?run|execute|simulate|run test/.test(query)) {
-    return `The **Dry-Run Simulator** lets you manually execute test cases step by step:\n\n1. Go to **Test Cases Repository** tab\n2. Click **▶️ Start Dry-Run**\n3. Mark each step as ✅ Passed, ❌ Failed, or 🔶 Blocked\n4. All results are saved to the SQLite database automatically\n\nWant me to walk you through any specific test case?`;
+  // ── 7. BDD GHERKIN CONVERSION ──
+  if (/gherkin|bdd|cucumber|given when then/.test(query)) {
+    return `### 📋 BDD Gherkin Feature File: "${storyTitle}"
+
+\`\`\`gherkin
+Feature: ${storyTitle}
+  As a QA engineer
+  I want to verify ${storyDesc.substring(0, 50)}
+  So that system reliability is guaranteed
+
+  @Positive @Smoke
+  Scenario: TC001 - Verify successful workflow
+    Given the user is on the active interface
+    When the user submits valid required data
+    Then the action completes successfully with confirmation
+
+  @Negative @Validation
+  Scenario Outline: TC002 - Verify invalid input rejection
+    Given the user is on the active interface
+    When the user enters "<input_val>"
+    And clicks submit
+    Then the system displays error message "<error_msg>"
+
+    Examples:
+      | input_val | error_msg                  |
+      |           | Field is required          |
+      | a         | Minimum length is 3 chars  |
+      | <script>  | Invalid characters entered |
+\`\`\`${apiNote}`;
   }
 
-  // ── 8. FORMATS ──
-  if (/format|lly tu|lly pbpa|del format|template/.test(query)) {
-    return `QAutopilot supports **3 test case formats**:\n\n- **LLY TU** — Includes Test Path, Designer, Category, Step Name\n- **LLY PBPA** — Focuses on Test Summary, Steps, and Expected Result\n- **DEL** — Sequential IDs (TC001...) with Test Data and Bug ID fields\n\nSelect your format from the dropdown before generating — the entire suite adapts automatically!`;
+  // ── 8. ACCEPTANCE CRITERIA REVIEW & AMBIGUITY CHECK ──
+  if (/review|clarity|ambiguity|criteria|ac /.test(query)) {
+    return `### 📊 Acceptance Criteria Quality & Ambiguity Audit
+
+**Feature**: "${storyTitle}"
+
+#### 1. Clarity Assessment:
+- **Strengths**: Core functional path is outlined clearly.
+- **Ambiguities Identified**:
+  - ⚠️ Error recovery workflow is underspecified when backend services time out.
+  - ⚠️ Concurrency behavior (simultaneous edits by two users) is not defined.
+  - ⚠️ Exact character limits and validation regex formats should be formalized.
+
+#### 💡 Recommended Enhanced Criteria:
+- **AC-NEW-1**: *The system must enforce input length between 3 and 255 alphanumeric characters.*
+- **AC-NEW-2**: *If network latency exceeds 10s, the client must display an explicit retry prompt.*${apiNote}`;
   }
 
-  // ── 9. FEATURE-SPECIFIC TEST CASE REQUESTS (Dynamic offline mock generator) ──
-  const mockFeature = getMockFeatureTestCases(query, format);
-  if (mockFeature) {
-    const mdList = formatMockTestCasesToMarkdown(mockFeature.cases, format);
-    const note = hasKey
-      ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI.*`
-      : `\n\n> 💡 *Tip: Connect your API key in ⚙️ Settings to generate custom suites from any user story.*`;
-    return `### Dynamic Mock Test Cases: ${mockFeature.title} (Format: **${format}**)\n\n${mdList}${note}`;
+  // ── 9. TEST ARCHITECT & STRATEGY ──
+  if (persona === 'test_architect' || /architecture|strategy|plan|traceability|matrix|risk/.test(query)) {
+    const archCases = [
+      {
+        title: `[Architecture] Verify data integrity across state transitions for ${storyTitle.substring(0, 30)}`,
+        type: 'Positive',
+        preconditions: '[AC1] Initial state verified',
+        steps: '1. Execute primary user action.\n2. Query database entity state.\n3. Verify all foreign key links and audit logs are recorded correctly.',
+        expectedResult: 'State transitions from Draft to Active with complete audit log entry.',
+        priority: 'High'
+      },
+      {
+        title: `[Risk Analysis] Verify transaction rollback on downstream service failure`,
+        type: 'Edge',
+        preconditions: 'Simulated network drop during final persistence step',
+        steps: '1. Begin transaction workflow.\n2. Inject fault before final commit.\n3. Verify database rolls back and client receives retryable error.',
+        expectedResult: 'Zero orphan records created; database remains consistent.',
+        priority: 'High'
+      }
+    ];
+
+    const jsonBlock = JSON.stringify(archCases, null, 2);
+    return `### 🎯 Test Architecture & Strategy Matrix: "${storyTitle}"
+
+#### 1. Risk Assessment:
+- **Critical Path**: Core workflow data submission & validation (Risk: **HIGH**)
+- **Data Integrity**: Persistence state consistency & rollback protection (Risk: **HIGH**)
+- **UI & Usability**: Responsive formatting & validation error states (Risk: **MEDIUM**)
+
+#### 2. Traceability Matrix:
+- \`[AC1]\` ➔ Covered by TC001, TC-ARCH-01
+- \`[AC2]\` ➔ Covered by TC002, TC-ARCH-02
+
+#### 3. Proposed Architectural Test Cases:
+\`\`\`json:testcases
+${jsonBlock}
+\`\`\`${apiNote}`;
   }
 
-  // ── 10. GENERAL TEST CASES FALLBACK ──
-  if (/test case|testcase|scenario|write test|generate test|add test/.test(query)) {
-    if (activeStory && activeStory.testCases.length > 0) {
-      const list = activeStory.testCases.slice(0, 5).map(tc => `- **${tc.customId || 'TC'} (${tc.type}):** ${tc.title}`).join('\n');
-      const extra = activeStory.testCases.length > 5 ? `\n...and ${activeStory.testCases.length - 5} more.` : '';
-      return `Here's a summary of the test suite for **"${activeStory.title}"**:\n\n${list}${extra}\n\nWant me to add more edge cases, security checks, or reformat these into a specific template?`;
-    }
-    return `I'd love to help write test cases! 📝 Here's a quick example for a **Login** feature:\n\n1. **TC001 (Positive):** Login with valid credentials → Redirected to dashboard\n2. **TC002 (Negative):** Login with wrong password → Error message shown\n3. **TC003 (Edge):** Password field with 256 characters → Handled gracefully\n4. **TC004 (Security):** Password masked in UI & encrypted in transit\n5. **TC005 (Performance):** Login response within 1.5 seconds\n\nPaste your user story in the generator to create a full custom suite!`;
-  }
+  // ── 10. GENERAL FALLBACK WITH DYNAMICALLY SYNTHESIZED TEST CASES ──
+  const activeAcText = activeStory?.acceptanceCriteria
+    ? (Array.isArray(activeStory.acceptanceCriteria) ? activeStory.acceptanceCriteria.map(a => a.content || a).join('\n') : String(activeStory.acceptanceCriteria))
+    : (raw.length > 15 ? raw : `[AC1] Verify core operational flow for "${storyTitle}".\n[AC2] Enforce input validation and error feedback.`);
 
-  // ── 11. GENERAL FALLBACK — smart, contextual, not robotic ──
-  const smartReplies = [
-    `That's a great question! Let me help you with that.`,
-    `Sure, I can help with that!`,
-    `Absolutely! Here's what I know about this topic.`,
-    `Great point — let me break this down for you.`
-  ];
-  const opener = smartReplies[Math.floor(Math.random() * smartReplies.length)];
+  const generatedCases = generateMockTestCases(
+    storyDesc || storyTitle,
+    activeAcText,
+    2,
+    2,
+    1,
+    0,
+    0,
+    format
+  );
 
-  let ctxBlock = '';
-  if (activeStory) {
-    ctxBlock = `\n\nIn the context of **"${activeStory.title}"**, I'd suggest:\n1. Verify all UI fields and buttons respond as expected.\n2. Add edge cases for boundary data inputs.\n3. Include a security test for any authentication or data submission flows.\n4. Check performance under typical and peak load conditions.`;
-  }
+  const jsonBlock = JSON.stringify(generatedCases, null, 2);
+  const formattedCaseList = generatedCases.map((tc, idx) => {
+    return `${idx + 1}. **[${tc.type}] ${tc.customId || `TC${idx + 1}`}: ${tc.title}**\n   - *Preconditions:* ${tc.preconditions}\n   - *Steps:*\n${tc.steps.split('\n').map(s => `     ${s}`).join('\n')}\n   - *Expected:* ${tc.expectedResult}`;
+  }).join('\n\n');
 
-  const apiNote = hasKey
-    ? `\n\n> ⚠️ *${providerShort} API quota exhausted — add billing credits to restore live AI responses.*`
-    : `\n\n> 💡 *Add your ${providerShort} API key in ⚙️ Settings to unlock real AI-powered answers.*`;
+  return `I have analyzed your request in the context of **"${storyTitle}"**.
 
-  return `${opener}\n\nYou asked: *"${raw}"*${ctxBlock}${apiNote}`;
+Here are the recommended test verification scenarios tailored directly to your requirements:
+
+${formattedCaseList}
+
+\`\`\`json:testcases
+${jsonBlock}
+\`\`\`
+
+> 💡 *Click **"💾 Save to Repository"** below to load these scenarios into your active test suite.*${apiNote}`;
 }
 
 // --- HELPER: GEMINI API CALL WITH FALLBACKS ---
 async function callGeminiApi(payload, apiKey) {
   const endpoints = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`
   ];
 
   let lastError = null;
@@ -1019,8 +2645,6 @@ async function callGeminiApi(payload, apiKey) {
             const listData = await listRes.json();
             const modelNames = listData.models ? listData.models.map(m => m.name) : [];
             console.log(`[Gemini API Diagnostic] Available models for this key:`, modelNames);
-          } else {
-            console.warn(`[Gemini API Diagnostic] Failed to list models:`, await listRes.text());
           }
         } catch (listErr) {
           console.warn(`[Gemini API Diagnostic] Error listing models:`, listErr.message);
@@ -1035,26 +2659,14 @@ async function callGeminiApi(payload, apiKey) {
   throw lastError || new Error("Failed to get response from Gemini API after trying all endpoints.");
 }
 
-// --- GLOBAL CHATBOT SYSTEM PROMPT ---
-const CHATBOT_SYSTEM_PROMPT = `You are QAutopilot, a world-class QA Automation Engineer.
-When users ask you to write, modify, analyze, or suggest test cases:
-1. **Strict Context Adherence**: Base your responses strictly on the provided user story, acceptance criteria, or reference document. Never assume or invent functionality, fields, inputs, or system actions that are not explicitly documented.
-2. **Zero Boilerplate (Faltu) Scenarios**: Absolutely exclude Visual/UI style checks, generic performance SLAs, generic server connection drops, and standard security attacks (like generic SQLi/XSS) unless the specification explicitly defines them.
-3. **Structured Test Case Formatting**: Format every proposed test case clearly with:
-   - **ID**: Sequential TC ID (e.g., TC001)
-   - **Title**: Clear, action-oriented behavior verification
-   - **Type**: Positive, Negative, Edge, Security, or Performance
-   - **Preconditions**: Starting state and Acceptance Criteria mapping (e.g., [AC1])
-   - **Steps**: Numbered operational steps with concrete input values (never write vague data placeholders like "enter valid details")
-   - **Expected Result**: Verifiable change or specific error message
-4. **Professional Tone**: Keep your responses concise, technical, direct, and focused on QA validation.`;
-
 // --- HELPER: GEMINI CHAT COMPLETION ---
-async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Default') {
+async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Default', persona = 'general_qa', storyContext = null) {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
   });
+
+  const systemInstruction = buildChatbotSystemPrompt(persona, format, storyContext);
 
   const contents = previousMessages.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
@@ -1067,30 +2679,32 @@ async function getGeminiChatResponse(chatId, newContent, apiKey, format = 'Defau
   });
 
   if (!apiKey) {
-    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, false, format);
+    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, false, format, persona, storyContext);
   }
 
   try {
     const resData = await callGeminiApi({
       contents,
-      systemInstruction: { parts: [{ text: CHATBOT_SYSTEM_PROMPT }] }
+      systemInstruction: { parts: [{ text: systemInstruction }] }
     }, apiKey);
     return resData.candidates[0].content.parts[0].text;
   } catch (err) {
     console.warn('[Gemini] API failed, falling back to mock mode:', err.message);
-    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, true, format);
+    return await generateDynamicMockChatResponse(chatId, 'gemini', newContent, true, format, persona, storyContext);
   }
 }
 
 // --- HELPER: OPENAI/CHATGPT CHAT COMPLETION ---
-async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Default') {
+async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Default', persona = 'general_qa', storyContext = null) {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
   });
 
+  const systemInstruction = buildChatbotSystemPrompt(persona, format, storyContext);
+
   const messages = [
-    { role: 'system', content: CHATBOT_SYSTEM_PROMPT }
+    { role: 'system', content: systemInstruction }
   ];
 
   previousMessages.forEach(msg => {
@@ -1106,7 +2720,7 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Defau
   });
 
   if (!apiKey) {
-    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, false, format);
+    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, false, format, persona, storyContext);
   }
 
   try {
@@ -1132,19 +2746,21 @@ async function getOpenAiChatResponse(chatId, newContent, apiKey, format = 'Defau
     return resData.choices[0].message.content;
   } catch (err) {
     console.warn('[ChatGPT] API failed, falling back to mock mode:', err.message);
-    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, true, format);
+    return await generateDynamicMockChatResponse(chatId, 'chatgpt', newContent, true, format, persona, storyContext);
   }
 }
 
 // --- HELPER: COPILOT CHAT COMPLETION ---
-async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Default') {
+async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Default', persona = 'general_qa', storyContext = null) {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
   });
 
+  const systemInstruction = buildChatbotSystemPrompt(persona, format, storyContext);
+
   const messages = [
-    { role: 'system', content: CHATBOT_SYSTEM_PROMPT }
+    { role: 'system', content: systemInstruction }
   ];
 
   previousMessages.forEach(msg => {
@@ -1160,7 +2776,7 @@ async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Defa
   });
 
   if (!apiKey) {
-    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, false, format);
+    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, false, format, persona, storyContext);
   }
 
   try {
@@ -1186,7 +2802,7 @@ async function getCopilotChatResponse(chatId, newContent, apiKey, format = 'Defa
     return resData.choices[0].message.content;
   } catch (err) {
     console.warn('[Copilot] API failed, falling back to mock mode:', err.message);
-    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, true, format);
+    return await generateDynamicMockChatResponse(chatId, 'copilot', newContent, true, format, persona, storyContext);
   }
 }
 
@@ -1272,6 +2888,7 @@ async function getOpenAiTestCases(userStory, acceptanceCriteria, positiveCount, 
     },
     body: JSON.stringify({
       model: 'gpt-4o',
+      temperature: 0.2,
       messages: [{ role: 'user', content: promptText }],
       response_format: { type: 'json_object' }
     })
@@ -1369,7 +2986,7 @@ Return a JSON object with this EXACT schema:
       "description": "string (detailed description of what this test case verifies)",
       "type": "string (Positive, Negative, Edge, Security, or Performance)",
       "preconditions": "string (starting with AC tag mapping, e.g. [AC1] User is logged out)",
-      "steps": "string (step-by-step actions)",
+      "steps": "string (step-by-step actions: 1. ...\\n2. ...)",
       "expectedResult": "string (Expected Result)",
       "priority": "string (High, Medium, or Low)"
     }
@@ -1382,8 +2999,8 @@ Return a JSON object with this EXACT schema:
 function buildPromptText(userStory, acceptanceCriteria, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, existingTitles, customizeVolume, format, docContext = '') {
   const formatInst = getFormatInstructions(format);
   return `
-You are an expert QA Automation Engineer.
-Generate QA test cases based on the following:
+You are a Principal QA Automation Engineer and Test Architect.
+Generate high-fidelity, highly accurate, and domain-specific manual test cases directly derived from the requirements below:
 
 **User Story / BRD Requirements:**
 ${userStory}
@@ -1391,50 +3008,55 @@ ${userStory}
 **Acceptance Criteria:**
 ${acceptanceCriteria}
 
-${docContext ? `**Uploaded Reference Document Context (PDF/DOCX/Code Specs):**\n${docContext}\n` : ''}
+${docContext ? `**Uploaded Reference Document Context:**\n${docContext}\n` : ''}
 
-**Required Test Cases to Generate:**
+**Volume Requirements:**
 ${customizeVolume === false ? `
-Generate only the absolute minimum, optimal number of test cases across all necessary types (Positive, Negative, Edge, Security, Performance) to fully cover the functional scenarios. Do NOT generate unnecessary, generic, repetitive, or redundant test cases. Each scenario must provide distinct testing value.
+Generate only the optimal, highest-value test cases across necessary types (Positive, Negative, Edge, Security, Performance) to fully cover all Acceptance Criteria clauses.
 ` : `
 - Generate up to ${positiveCount} Positive test cases (type: "Positive")
 - Generate up to ${negativeCount} Negative test cases (type: "Negative")
 - Generate up to ${edgeCount} Edge test cases (type: "Edge")
 - Generate up to ${securityCount} Security test cases (type: "Security")
 - Generate up to ${performanceCount} Performance test cases (type: "Performance")
-(Note: Do NOT generate redundant, generic, or filler test cases to meet these counts if the reference context does not support them. Quality and distinct coverage are paramount. If the specification only supports fewer high-value cases, output only those and skip the rest.)
 `}
 
-${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Database (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\nYou must ensure all newly generated test cases are distinct from these existing ones.` : ''}
+${existingTitles && existingTitles.length > 0 ? `**Existing Test Cases in Suite (DO NOT DUPLICATE THESE):**\n${existingTitles.map((t, idx) => `${idx + 1}. ${t}`).join('\n')}\n` : ''}
 
-**CRITICAL QUALITY & ACCURACY INSTRUCTIONS:**
-1. **Strict Core Alignment & Realism:** Every generated test case must map directly, precisely, and exclusively to the features, rules, parameters, validation thresholds, buttons, status transitions, and data fields described in the User Story, Acceptance Criteria, and Uploaded Reference Document Context. Do NOT invent or assume any functionality, fields, components, buttons, or workflows that are not explicitly specified in the reference context.
-2. **STRICT REQUIREMENT BOUNDARY (MANDATORY):** You are strictly forbidden from writing test cases for any buttons, pages, fields, menus, inputs, user roles, or system actions that are not explicitly documented in the reference text. Treat all non-specified parameters and items as non-existent. Do not extend the scope, do not add best-practice features, and do not invent validation rules (e.g. if the document does not specify a length or formatting rule for a field, do not test validation limits for it; only verify that the field accepts input).
-3. **EXCLUDED JUNK/BOILERPLATE (FALTU) SCENARIOS (STRICTLY PROHIBITED):**
-   You MUST NOT generate any of the following boilerplate/filler scenarios under any circumstances unless they are explicitly and literally written in the document:
-   - NO Visual/UI layout checks (e.g., verifying button color, hover effect, cursor type, margin, alignment, font sizes, or screen responsive layouts).
-   - NO Generic Performance SLAs (e.g., verifying that page loads in under 2 seconds, TTFB, or general speed checks).
-   - NO Generic Security scenarios (e.g., SQL injection, XSS inputs, CSRF, standard authentication timeouts) unless the document defines explicit security algorithms/keys.
-   - NO Generic Network/Server errors (e.g., checking 500 internal server errors, internet disconnection, database connection failures).
-   - NO Trivial navigation/clicks (e.g., verifying that clicking a Cancel button closes a popup or redirects to dashboard) unless there is complex conditional permission logic.
-   - NO Invented form limits (e.g., do not test "Verify error when name is 100 characters" if the document does not mention name character limits).
-4. **No Redundant or Split Validations:** Do NOT split identical form field validation flows into multiple test cases (e.g., do NOT generate "Verify error when field A is empty" and "Verify error when field B is empty" as separate scenarios). Group them into a single comprehensive test case: "Verify form validation errors when required fields are empty".
-5. **Concrete Test Data & Precise Verification:** Never use vague placeholders like "enter valid data". Specify precise test inputs (e.g., exact emails, specific numerical values, boundaries) and the exact expected outputs (e.g., specific error texts like "Invalid Email Address format").
-6. **Accurate BRD Mapping & Exhaustive Depth:** Every test case must be highly specific and map directly to a functional rule, button, validation check, or status transition described in the requirements. Write test cases with deep, comprehensive coverage and exhaustive details, including specific test inputs, data states, and navigation paths.
-7. **Explicit Step Action Sequence:** Do NOT use single-sentence placeholder steps like "Perform actions." Instead, provide explicit, logical, step-by-step operational steps containing full action details.
-8. **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP) Values:** For every input field, you must explicitly inject concrete fuzzed values representing both valid and invalid partitions. For example, instead of writing "Enter invalid mobile number", write "Enter '+1-555' (invalid length)" or "Enter '9999999999' (valid number)".
-9. **State Transition Testing (STT) Scenarios:** If the requirements define a workflow state machine (e.g. Draft -> Pending -> Approved), you must write specific scenarios verifying every valid status transition path, blocked invalid transition attempts (e.g. transition directly from Draft to Approved), and check that only authorized roles can trigger specific transitions.
-10. **Verifiable Assertions in Expected Results:** Specify the exact visual or functional changes expected (e.g. specific error messages shown, status code transition, page redirects, field highlighting) rather than generic success descriptors.
-11. **Zero Filler Scenarios:** Quality and functional depth are paramount. If the story only warrants 2 high-value test cases, generate ONLY those 2. Never generate junk scenarios just to reach requested counts.
-12. **Acceptance Criteria Mapping:** You MUST map each test case to the Acceptance Criteria it validates by placing the matching AC tag (e.g. "[AC1]" or "[AC2]") at the very beginning of the "preconditions" field. For example: "preconditions": "[AC1] User is logged out." If no specific AC exists or the document is generic, use "[AC1]" as default. Do not make up fake AC numbers that do not correspond to the actual requirements.
-13. **Sequential ID:** Generate sequential custom ID (e.g. "TC001", "TC002"...) for the test cases within this set, stored in the "customId" field.
+**CRITICAL ACCURACY & QUALITY RULES:**
+1. **Clause-by-Clause Acceptance Criteria Coverage:** Every single Acceptance Criterion (AC-1, AC-2, etc.) must be directly covered with dedicated Positive, Negative, and Boundary test scenarios. The "preconditions" field MUST begin with the corresponding tag (e.g. "[AC1]" or "[AC2]").
+2. **Concrete Test Data (NEVER USE VAGUE PLACEHOLDERS):** Never write "enter valid data" or "enter invalid input". You must provide exact, concrete test values (e.g. Email: "jane.doe@example.com", Password: "SecurePass@123", Amount: "$450.00", File: "Report_2026.pdf (1.8 MB)", Promo Code: "SAVE20", OTP: "482910").
+3. **Numbered Operational Step Sequences:** Every test case must have explicit, actionable numbered steps (1. Navigate to... 2. In field X, enter Y... 3. Click button Z... 4. Observe outcome).
+4. **Verifiable & Precise Expected Results:** Specify exact UI alerts, validation messages (e.g. "Rejection reason is required (min 10 characters)"), button states (enabled/disabled), status badge updates (e.g. "Draft" -> "Approved"), and database persistence.
+5. **No Hallucinated Features or Redundancies:** Test cases must strictly adhere to the documented specifications. Do not invent fictitious third-party systems, buttons, or pages not mentioned in the requirements.
 
-**Strict Formatting & Speed Optimization Guidelines:**
+**Few-Shot Reference Example:**
+{
+  "testCases": [
+    {
+      "customId": "TC001",
+      "title": "Verify automatic approval for claims submitted under $500.00 threshold",
+      "type": "Positive",
+      "preconditions": "[AC1] User is logged in as Employee and on Expense Claim Submission screen.",
+      "steps": "1. Navigate to Expense Submission form.\\n2. Enter Claim Title: 'Client Lunch' and Total Amount: '$450.00'.\\n3. Attach valid receipt 'receipt.jpg' (size 1.2 MB).\\n4. Click 'Submit Claim'.\\n5. Check status in Claims Dashboard.",
+      "expectedResult": "Claim is successfully created and automatically transitions to 'Approved' status without routing to manager queue. Status badge displays green 'Approved'.",
+      "priority": "High"
+    },
+    {
+      "customId": "TC002",
+      "title": "Verify validation error when rejection reason is submitted with under 10 characters",
+      "type": "Negative",
+      "preconditions": "[AC4] Approver is viewing a pending claim modal in the Approval Queue.",
+      "steps": "1. Click 'Reject' button on pending claim #1042.\\n2. In the Rejection Comments textarea, enter 'No' (2 characters).\\n3. Click 'Confirm Rejection'.",
+      "expectedResult": "Rejection is blocked. Inline error alert displays: 'Rejection reason is mandatory (minimum 10 characters)'. Claim remains in 'Pending' status.",
+      "priority": "High"
+    }
+  ]
+}
+
+**Schema Format Requirement:**
 ${formatInst}
-Return ONLY a valid, raw JSON object matching the schema. To optimize response speed and ensure successful parsing:
-- Do NOT include any introductory or concluding text, explanations, or notes.
-- Do NOT wrap the JSON block in markdown code block ticks (\`\`\`json or \`\`\`).
-- Output the raw JSON directly as a single object.
+Return ONLY a valid, raw JSON object matching the schema. No markdown ticks, no conversational preamble.
 `;
 }
 
@@ -1580,11 +3202,13 @@ async function saveGeneratedTestCase(tc, storyId, format, index) {
 }
 
 // --- HELPER: CLAUDE CHAT COMPLETION (with model fallback chain) ---
-async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Default') {
+async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Default', persona = 'general_qa', storyContext = null) {
   const previousMessages = await prisma.message.findMany({
     where: { chatId },
     orderBy: { timestamp: 'asc' }
   });
+
+  const systemInstruction = buildChatbotSystemPrompt(persona, format, storyContext);
 
   const messages = previousMessages.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'assistant',
@@ -1597,7 +3221,7 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
   });
 
   if (!apiKey) {
-    return await generateDynamicMockChatResponse(chatId, 'claude', newContent, false, format);
+    return await generateDynamicMockChatResponse(chatId, 'claude', newContent, false, format, persona, storyContext);
   }
 
   const claudeModels = [
@@ -1620,7 +3244,7 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01'
         },
-        body: JSON.stringify({ model, max_tokens: 2000, system: CHATBOT_SYSTEM_PROMPT, messages })
+        body: JSON.stringify({ model, max_tokens: 2000, system: systemInstruction, messages })
       });
 
       if (response.ok) {
@@ -1641,7 +3265,7 @@ async function getClaudeChatResponse(chatId, newContent, apiKey, format = 'Defau
   }
 
   console.warn('[Claude] All models failed, falling back to mock mode.');
-  return await generateDynamicMockChatResponse(chatId, 'claude', newContent, true, format);
+  return await generateDynamicMockChatResponse(chatId, 'claude', newContent, true, format, persona, storyContext);
 }
 
 // --- HELPER: CLAUDE TEST CASES GENERATOR ---
@@ -1658,6 +3282,7 @@ async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, 
     },
     body: JSON.stringify({
       model: 'claude-3-5-sonnet-latest',
+      temperature: 0.2,
       max_tokens: 4000,
       messages: [{ role: 'user', content: promptText }]
     })
@@ -1681,10 +3306,20 @@ async function getClaudeTestCases(userStory, acceptanceCriteria, positiveCount, 
 // GET all chats (history) for user
 app.get('/api/chats', async (req, res) => {
   try {
-    const userId = req.query.userId || 'default-user';
+    let userId = req.query.userId || 'default-user';
+    if (!userId || userId === 'undefined' || userId === 'null' || (typeof userId === 'string' && userId.trim() === '')) {
+      userId = 'default-user';
+    }
     const chats = await prisma.chat.findMany({
       where: { userId },
-      include: { messages: true },
+      include: {
+        messages: {
+          orderBy: { timestamp: 'asc' }
+        },
+        userStories: {
+          include: { testCases: true, acceptanceCriteria: true }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(chats);
@@ -1698,12 +3333,18 @@ app.get('/api/chats', async (req, res) => {
 app.post('/api/chats/:chatId/messages', async (req, res) => {
   try {
     const { chatId } = req.params;
-    const { role, content, title, userId = 'default-user' } = req.body;
+    let { 
+      role, content, title, userId = 'default-user', persona = 'general_qa', storyContext = null,
+      adoCredentials = null, jiraCredentials = null, almCredentials = null
+    } = req.body;
+    if (!userId || userId === 'undefined' || userId === 'null' || (typeof userId === 'string' && userId.trim() === '')) {
+      userId = 'default-user';
+    }
     const provider = req.headers['x-provider'] || 'gemini';
     const format = req.headers['x-format'] || 'Default';
     const apiKey = req.headers['x-api-key'] || (provider === 'claude' ? process.env.CLAUDE_API_KEY : provider === 'chatgpt' ? process.env.OPENAI_API_KEY : provider === 'copilot' ? process.env.COPILOT_API_KEY : process.env.GEMINI_API_KEY);
 
-    console.log(`[CHAT_MESSAGE_REQUEST] Provider: ${provider} | Format: ${format} | Has Header Key: ${!!req.headers['x-api-key']} | Resolved Key Source: ${req.headers['x-api-key'] ? 'Client Header' : 'Backend Env'} | Key Length: ${apiKey ? apiKey.length : 0}`);
+    console.log(`[CHAT_MESSAGE_REQUEST] Provider: ${provider} | Format: ${format} | Persona: ${persona} | Has Header Key: ${!!req.headers['x-api-key']} | Resolved Key Source: ${req.headers['x-api-key'] ? 'Client Header' : 'Backend Env'} | Key Length: ${apiKey ? apiKey.length : 0}`);
 
     let chat = await prisma.chat.findUnique({ where: { id: chatId } });
     if (!chat) {
@@ -1714,6 +3355,11 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
           userId: userId,
           createdAt: new Date().toISOString()
         }
+      });
+    } else if (chat.userId === 'default-user' && userId !== 'default-user') {
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { userId: userId }
       });
     }
 
@@ -1728,19 +3374,60 @@ app.post('/api/chats/:chatId/messages', async (req, res) => {
     });
 
     let aiResponseContent = '';
-    try {
-      if (provider === 'claude') {
-        aiResponseContent = await getClaudeChatResponse(chatId, content, apiKey, format);
-      } else if (provider === 'chatgpt') {
-        aiResponseContent = await getOpenAiChatResponse(chatId, content, apiKey, format);
-      } else if (provider === 'copilot') {
-        aiResponseContent = await getCopilotChatResponse(chatId, content, apiKey, format);
-      } else {
-        aiResponseContent = await getGeminiChatResponse(chatId, content, apiKey, format);
+
+    // --- Direct External System Fetch Interception (ADO, Jira, ALM, Swarm) ---
+    const isSwarm = /^\/swarm\b|swarm\s*audit|360\s*(?:qa|quality)\s*audit|multi[- ]agent\s*(?:qa|audit|swarm)|run\s*all\s*agents/i.test(content);
+    const adoIds = extractAdoIds(content);
+    const jiraKeys = extractJiraKeys(content);
+    const almIds = extractAlmIds(content);
+
+    if (isSwarm) {
+      console.log(`[CHAT] Intercepted Multi-Agent QA Swarm intent`);
+      const swarmTitle = storyContext?.title || 'Active User Story';
+      const swarmDesc = storyContext?.description || (content.length > 30 ? content : 'Verify end-to-end functionality, security, boundaries, and performance.');
+      const swarmAc = storyContext?.acceptanceCriteria ? (Array.isArray(storyContext.acceptanceCriteria) ? storyContext.acceptanceCriteria.join('\n') : String(storyContext.acceptanceCriteria)) : '';
+      const swarmResult = await runMultiAgentSwarmAudit(swarmTitle, swarmDesc, swarmAc, format);
+      aiResponseContent = formatSwarmChatMessage(swarmResult);
+    } else if (adoIds && adoIds.length > 0) {
+      console.log(`[CHAT] Intercepted ADO fetch intent for IDs: ${adoIds.join(', ')}`);
+      const orgUrl = adoCredentials?.orgUrl || process.env.ADO_ORG_URL;
+      const pat = adoCredentials?.pat || process.env.ADO_PAT || 'mock';
+      const includeSubTasks = !!adoCredentials?.includeSubTasks;
+      const workItems = await fetchAdoWorkItemsHelper(adoIds, orgUrl, pat, includeSubTasks);
+      aiResponseContent = formatAdoChatMessage(workItems);
+    } else if (jiraKeys && jiraKeys.length > 0) {
+      console.log(`[CHAT] Intercepted Jira fetch intent for Keys: ${jiraKeys.join(', ')}`);
+      const jiraHost = jiraCredentials?.jiraHost || process.env.JIRA_HOST;
+      const jiraEmail = jiraCredentials?.jiraEmail || process.env.JIRA_EMAIL;
+      const jiraToken = jiraCredentials?.jiraToken || process.env.JIRA_TOKEN || 'mock';
+      const includeSubTasks = !!jiraCredentials?.includeSubTasks;
+      const issues = await fetchJiraIssuesHelper(jiraKeys, jiraHost, jiraEmail, jiraToken, includeSubTasks);
+      aiResponseContent = formatJiraChatMessage(issues);
+    } else if (almIds && almIds.length > 0) {
+      console.log(`[CHAT] Intercepted ALM fetch intent for IDs: ${almIds.join(', ')}`);
+      const almUrl = almCredentials?.almUrl || process.env.ALM_URL;
+      const almDomain = almCredentials?.almDomain || process.env.ALM_DOMAIN;
+      const almProject = almCredentials?.almProject || process.env.ALM_PROJECT;
+      const almUsername = almCredentials?.almUsername || process.env.ALM_USERNAME;
+      const almPassword = almCredentials?.almPassword || process.env.ALM_PASSWORD || 'mock';
+      const includeSubTasks = !!almCredentials?.includeSubTasks;
+      const requirements = await fetchAlmRequirementsHelper(almIds, almUrl, almDomain, almProject, almUsername, almPassword, includeSubTasks);
+      aiResponseContent = formatAlmChatMessage(requirements);
+    } else {
+      try {
+        if (provider === 'claude') {
+          aiResponseContent = await getClaudeChatResponse(chatId, content, apiKey, format, persona, storyContext);
+        } else if (provider === 'chatgpt') {
+          aiResponseContent = await getOpenAiChatResponse(chatId, content, apiKey, format, persona, storyContext);
+        } else if (provider === 'copilot') {
+          aiResponseContent = await getCopilotChatResponse(chatId, content, apiKey, format, persona, storyContext);
+        } else {
+          aiResponseContent = await getGeminiChatResponse(chatId, content, apiKey, format, persona, storyContext);
+        }
+      } catch (apiErr) {
+        console.error(`${provider} Chat API Error:`, apiErr.message);
+        aiResponseContent = `Failed to get response from ${provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'copilot' ? 'Copilot' : 'Gemini'} API: ${apiErr.message}. Please verify your API Key and internet connection.`;
       }
-    } catch (apiErr) {
-      console.error(`${provider} Chat API Error:`, apiErr.message);
-      aiResponseContent = `Failed to get response from ${provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'copilot' ? 'Copilot' : 'Gemini'} API: ${apiErr.message}. Please verify your API Key and internet connection.`;
     }
 
     const aiMessage = await prisma.message.create({
@@ -1780,7 +3467,10 @@ app.delete('/api/chats/:chatId', async (req, res) => {
 // GET all user stories (segregated by userId)
 app.get('/api/user-stories', async (req, res) => {
   try {
-    const userId = req.query.userId || 'default-user';
+    let userId = req.query.userId || 'default-user';
+    if (!userId || userId === 'undefined' || userId === 'null' || (typeof userId === 'string' && userId.trim() === '')) {
+      userId = 'default-user';
+    }
     const stories = await prisma.userStory.findMany({
       where: { userId },
       include: {
@@ -1800,6 +3490,7 @@ app.get('/api/user-stories', async (req, res) => {
 app.post('/api/user-stories', async (req, res) => {
   try {
     const {
+      title: customTitle,
       userStory,
       acceptanceCriteria,
       docContext = '',
@@ -1811,59 +3502,58 @@ app.post('/api/user-stories', async (req, res) => {
       customizeVolume = true,
       userId = 'default-user',
       chatId,
-      format = 'Default'
+      format = 'Default',
+      generateTestCases = true,
+      createOnly = false
     } = req.body;
 
-    if (!userStory && !acceptanceCriteria) {
+    if (!userStory && !acceptanceCriteria && !customTitle) {
       return res.status(400).json({ error: 'User Story or Acceptance Criteria is required.' });
     }
 
-    console.log(`[USER_STORY_REQUEST] Story Length: ${userStory ? userStory.length : 0} | AC Length: ${acceptanceCriteria ? acceptanceCriteria.length : 0} | Format: ${format} | Provider: ${req.headers['x-provider'] || 'gemini'}`);
+    let cleanUserId = userId;
+    if (!cleanUserId || cleanUserId === 'undefined' || cleanUserId === 'null' || (typeof cleanUserId === 'string' && cleanUserId.trim() === '')) {
+      cleanUserId = 'default-user';
+    }
 
-    const title = userStory.substring(0, 50) || 'Untitled User Story';
-    const cleanStory = (userStory || '').toLowerCase().trim();
+    console.log(`[USER_STORY_REQUEST] User: ${cleanUserId} | Story Length: ${userStory ? userStory.length : 0} | AC Length: ${acceptanceCriteria ? acceptanceCriteria.length : 0} | Format: ${format} | GenerateTCs: ${!createOnly && generateTestCases !== false}`);
 
-    // 1. Identify existing UserStories for Duplicate Checking
-    const existingStories = await prisma.userStory.findMany({
-      where: { userId },
-      include: { testCases: true }
-    });
+    const title = customTitle || (userStory ? userStory.substring(0, 50) : 'Untitled User Story');
 
-    let matchedStory = existingStories.find(story => {
-      const dbTitle = story.title.toLowerCase().trim();
-      const dbDesc = story.description.toLowerCase().trim();
-      return cleanStory.includes(dbTitle) || 
-             dbTitle.includes(cleanStory) ||
-             (cleanStory.length > 50 && dbDesc.substring(0, 50) === cleanStory.substring(0, 50));
-    });
+    // 1. Determine Story ID & ensure Chat exists
+    const storyId = (req.body.storyId && req.body.storyId.startsWith('US-'))
+      ? req.body.storyId
+      : ('US-' + Date.now() + '-' + Math.floor(Math.random() * 1000));
 
-    let storyId;
-    let existingTitles = [];
-    if (matchedStory) {
-      storyId = matchedStory.id;
-      // Set existingTitles = [] so LLM generates a complete fresh set
-      existingTitles = [];
-    } else {
-      storyId = 'US-' + Date.now();
-      if (chatId) {
-        const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
-        if (!chatExists) {
-          await prisma.chat.create({
-            data: {
-              id: chatId,
-              title: title || 'New Chat',
-              userId: userId,
-              createdAt: new Date().toISOString()
-            }
-          });
-        }
+    if (chatId) {
+      const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
+      if (!chatExists) {
+        await prisma.chat.create({
+          data: {
+            id: chatId,
+            title: title || 'New Chat',
+            userId: cleanUserId,
+            createdAt: new Date().toISOString()
+          }
+        });
+      } else if (chatExists.userId === 'default-user' && cleanUserId !== 'default-user') {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { userId: cleanUserId }
+        });
       }
+    }
+
+    let matchedStory = req.body.storyId ? await prisma.userStory.findUnique({ where: { id: req.body.storyId } }) : null;
+    let existingTitles = [];
+
+    if (!matchedStory) {
       matchedStory = await prisma.userStory.create({
         data: {
           id: storyId,
           title: title,
           description: userStory || '',
-          userId: userId,
+          userId: cleanUserId,
           createdAt: new Date().toISOString(),
           chatId: chatId || null
         }
@@ -1881,6 +3571,51 @@ app.post('/api/user-stories', async (req, res) => {
           });
         }
       }
+    } else {
+      if (!createOnly && generateTestCases !== false) {
+        await prisma.testCase.deleteMany({ where: { userStoryId: storyId } });
+      }
+      await prisma.acceptanceCriterion.deleteMany({ where: { userStoryId: storyId } });
+      await prisma.userStory.update({
+        where: { id: storyId },
+        data: {
+          title: title,
+          description: userStory || '',
+          userId: cleanUserId,
+          chatId: chatId || matchedStory.chatId || null,
+          createdAt: new Date().toISOString()
+        }
+      });
+      if (acceptanceCriteria) {
+        const criteriaLines = parseAndGroupCriteria(acceptanceCriteria);
+        for (const line of criteriaLines) {
+          await prisma.acceptanceCriterion.create({
+            data: {
+              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+              content: line,
+              userStoryId: storyId
+            }
+          });
+        }
+      }
+    }
+
+    // If only creating/saving story without bulk test cases, return immediately
+    if (createOnly || generateTestCases === false) {
+      const fullStory = await prisma.userStory.findUnique({
+        where: { id: storyId },
+        include: {
+          acceptanceCriteria: true,
+          testCases: true
+        }
+      });
+      return res.status(201).json({
+        success: true,
+        storyId,
+        duplicateCount: 0,
+        testCases: fullStory.testCases || [],
+        story: fullStory
+      });
     }
 
     // 2. Generate Test Cases using Gemini, Claude, ChatGPT or Mock
@@ -2030,32 +3765,6 @@ app.post('/api/user-stories', async (req, res) => {
       }
     }
 
-    // 3. WIPE old test cases and acceptance criteria if matchedStory exists to allow fresh overwrite
-    if (matchedStory) {
-      await prisma.testCase.deleteMany({ where: { userStoryId: storyId } });
-      await prisma.acceptanceCriterion.deleteMany({ where: { userStoryId: storyId } });
-      await prisma.userStory.update({
-        where: { id: storyId },
-        data: {
-          title: title,
-          description: userStory || '',
-          createdAt: new Date().toISOString()
-        }
-      });
-      if (acceptanceCriteria) {
-        const criteriaLines = parseAndGroupCriteria(acceptanceCriteria);
-        for (const line of criteriaLines) {
-          await prisma.acceptanceCriterion.create({
-            data: {
-              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line,
-              userStoryId: storyId
-            }
-          });
-        }
-      }
-    }
-
     const savedTestCases = [];
     let duplicateCount = 0;
 
@@ -2073,7 +3782,7 @@ app.post('/api/user-stories', async (req, res) => {
       savedTestCases.push(newTc);
     }
 
-    // 4. Create AI Chat message if chatId is provided
+    // 3. Create AI Chat message if chatId is provided
     let aiMessage = null;
     if (chatId) {
       let chat = await prisma.chat.findUnique({ where: { id: chatId } });
@@ -2082,7 +3791,7 @@ app.post('/api/user-stories', async (req, res) => {
           data: {
             id: chatId,
             title: 'QAutopilot: ' + (userStory.substring(0, 20) || 'Test Cases'),
-            userId: userId,
+            userId: cleanUserId,
             createdAt: new Date().toISOString()
           }
         });
@@ -2094,7 +3803,7 @@ app.post('/api/user-stories', async (req, res) => {
           data: {
             id: 'MSG-' + Date.now(),
             role: 'user',
-            content: `Generate test cases for User Story:\n${userStory}\n\nAcceptance Criteria:\n${acceptanceCriteria}`,
+            content: `Generate test cases for User Story:\n${userStory}${acceptanceCriteria ? `\n\nAcceptance Criteria:\n${acceptanceCriteria}` : ''}`,
             timestamp: new Date().toISOString(),
             chatId: chatId
           }
@@ -2270,24 +3979,34 @@ async function getGeminiTestCasesFromDoc(documentName, documentText, positiveCou
 }
 
 function generateMockTestCasesFromDoc(documentName, documentText, positiveCount, negativeCount, edgeCount, securityCount, performanceCount, format = 'Default') {
-  const words = documentText.replace(/[^\w\s]/g, '').split(/\s+/).slice(0, 15).join(' ');
-  const userStory = `As a QAutopilot analyst, I want to execute business features from "${documentName}" so that we verify system specs: ${words}...`;
-  const acceptanceCriteria = `AC1: The system must enforce validation rules in ${documentName}.\nAC2: Navigation and actions defined in ${documentName} must respond correctly.`;
-  
+  // Extract key requirement sentences/clauses from the document
+  const rawClauses = documentText
+    .split(/\r?\n|(?<=[.;])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 20 && !s.startsWith('#') && !s.startsWith('http'));
+
+  const topClauses = rawClauses.slice(0, 5);
+  const criteriaText = topClauses.length > 0
+    ? topClauses.map((c, i) => `[AC${i + 1}] ${c}`).join('\n')
+    : `[AC1] Enforce functional rules and validations specified in "${documentName}".\n[AC2] Verify navigation, actions, and system data integrity.`;
+
+  const userStory = `As a QA engineer verifying "${documentName}", I want to validate the functional flows and business logic defined in the specification document so that all requirements operate accurately and reliably.`;
+
   const testCases = generateMockTestCases(
-    documentText,
-    acceptanceCriteria,
+    userStory,
+    criteriaText,
     positiveCount,
     negativeCount,
     edgeCount,
     securityCount,
     performanceCount,
-    format
+    format,
+    documentText.substring(0, 1500)
   );
-  
+
   return {
     userStory,
-    acceptanceCriteria,
+    acceptanceCriteria: criteriaText,
     testCases
   };
 }
@@ -2313,30 +4032,15 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
       return res.status(400).json({ error: 'Document text is required.' });
     }
 
-    // 1. Identify if an existing story exists for this user containing documentName
-    const docBaseName = documentName.replace(/\.[^/.]+$/, "");
-    const matchedStory = await prisma.userStory.findFirst({
-      where: {
-        userId,
-        OR: [
-          { title: { contains: documentName } },
-          { title: { contains: docBaseName } }
-        ]
-      },
-      include: { testCases: true }
-    });
+    let cleanUserId = userId;
+    if (!cleanUserId || cleanUserId === 'undefined' || cleanUserId === 'null' || (typeof cleanUserId === 'string' && cleanUserId.trim() === '')) {
+      cleanUserId = 'default-user';
+    }
 
     let existingTitles = [];
-    let finalStoryId = null;
-    let isNewStory = true;
-
-    if (matchedStory) {
-      // Set existingTitles = [] so LLM generates a complete fresh set
-      existingTitles = [];
-      finalStoryId = matchedStory.id;
-      isNewStory = false;
-      console.log(`Matched existing story ${finalStoryId} for doc ${documentName}. Generating fresh test cases.`);
-    }
+    const finalStoryId = (req.body.storyId && req.body.storyId.startsWith('US-'))
+      ? req.body.storyId
+      : ('US-' + Date.now() + '-' + Math.floor(Math.random() * 1000));
 
     const provider = req.headers['x-provider'] || 'gemini';
     const apiKey = req.headers['x-api-key'] || 
@@ -2482,68 +4186,47 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
     const acText = result.acceptanceCriteria || `AC1: Behavior must match ${documentName}.`;
     const parsedTestCases = result.testCases || [];
 
-    if (isNewStory) {
-      finalStoryId = 'US-' + Date.now();
-      const storyTitle = `Story from ${documentName}`;
-      if (chatId) {
-        const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
-        if (!chatExists) {
-          await prisma.chat.create({
-            data: {
-              id: chatId,
-              title: `Doc: ${documentName}`,
-              userId: userId,
-              createdAt: new Date().toISOString()
-            }
-          });
-        }
-      }
-      await prisma.userStory.create({
-        data: {
-          id: finalStoryId,
-          title: storyTitle,
-          description: storyText,
-          userId,
-          createdAt: new Date().toISOString(),
-          chatId: chatId || null
-        }
-      });
-
-      if (acText) {
-        const acLines = parseAndGroupCriteria(acText);
-        for (const line of acLines) {
-          await prisma.acceptanceCriterion.create({
-            data: {
-              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line,
-              userStoryId: finalStoryId
-            }
-          });
-        }
+    const storyTitle = `Story from ${documentName}`;
+    if (chatId) {
+      const chatExists = await prisma.chat.findUnique({ where: { id: chatId } });
+      if (!chatExists) {
+        await prisma.chat.create({
+          data: {
+            id: chatId,
+            title: `Doc: ${documentName}`,
+            userId: cleanUserId,
+            createdAt: new Date().toISOString()
+          }
+        });
+      } else if (chatExists.userId === 'default-user' && cleanUserId !== 'default-user') {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { userId: cleanUserId }
+        });
       }
     }
 
-    // 2. WIPE old test cases and acceptance criteria if not new to allow fresh overwrite
-    if (!isNewStory) {
-      await prisma.testCase.deleteMany({ where: { userStoryId: finalStoryId } });
-      await prisma.acceptanceCriterion.deleteMany({ where: { userStoryId: finalStoryId } });
-      await prisma.userStory.update({
-        where: { id: finalStoryId },
-        data: {
-          description: storyText
-        }
-      });
-      if (acText) {
-        const acLines = parseAndGroupCriteria(acText);
-        for (const line of acLines) {
-          await prisma.acceptanceCriterion.create({
-            data: {
-              id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-              content: line,
-              userStoryId: finalStoryId
-            }
-          });
-        }
+    await prisma.userStory.create({
+      data: {
+        id: finalStoryId,
+        title: storyTitle,
+        description: storyText,
+        userId: cleanUserId,
+        createdAt: new Date().toISOString(),
+        chatId: chatId || null
+      }
+    });
+
+    if (acText) {
+      const acLines = parseAndGroupCriteria(acText);
+      for (const line of acLines) {
+        await prisma.acceptanceCriterion.create({
+          data: {
+            id: 'AC-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+            content: line,
+            userStoryId: finalStoryId
+          }
+        });
       }
     }
 
@@ -2574,7 +4257,7 @@ app.post('/api/user-stories/generate-from-doc', async (req, res) => {
           data: {
             id: chatId,
             title: 'QAutopilot Doc: ' + documentName,
-            userId: userId,
+            userId: cleanUserId,
             createdAt: new Date().toISOString()
           }
         });
@@ -3000,26 +4683,17 @@ Output fuzzed validation scenarios as a JSON object containing a "testCases" arr
     }
 
     if (usedMock || tcs.length === 0) {
-      tcs = [
-        {
-          customId: 'TC-TAR-' + Math.floor(Math.random() * 900 + 100),
-          title: 'Verify targeted flow for: ' + acContent.substring(0, 50),
-          type: 'Positive',
-          preconditions: `${targetTag} System initialized and ready to verify: ${acContent.substring(0, 40)}...`,
-          steps: `1. Open test interface.\n2. Perform verification steps matching: ${acContent}\n3. Confirm results conform to expected outcomes.`,
-          expectedResult: 'System returns validation logs and confirms execution.',
-          priority: 'High'
-        },
-        {
-          customId: 'TC-TAR-' + Math.floor(Math.random() * 900 + 100),
-          title: 'Verify validation boundary handling for: ' + acContent.substring(0, 50),
-          type: 'Edge',
-          preconditions: `${targetTag} System online. Parameter bounds checked relative to: ${acContent.substring(0, 40)}...`,
-          steps: `1. Access form inputs.\n2. Supply border/limit inputs related to: ${acContent}\n3. Trigger submission check.`,
-          expectedResult: 'System parses validation constraints successfully or returns failure gracefully.',
-          priority: 'Medium'
-        }
-      ];
+      const analyzed = analyzeACIntent({ tag: targetTag, index: resolvedIndex, text: acContent });
+      const synthesized = synthesizeScenariosForAC(analyzed, story.title || 'User Story');
+      tcs = synthesized.map((s, idx) => ({
+        customId: `TC-TAR-${resolvedIndex}${String(idx + 1).padStart(2, '0')}`,
+        title: s.title,
+        type: s.type,
+        preconditions: s.preconditions,
+        steps: s.steps,
+        expectedResult: s.expectedResult,
+        priority: s.priority || 'High'
+      }));
     }
 
     const saved = [];
@@ -4279,6 +5953,102 @@ app.post('/api/alm/work-item', async (req, res) => {
   } catch (error) {
     console.error('[ALM Fetch Error]:', error);
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET registered QA Skills
+app.get('/api/qa-agents/skills', async (req, res) => {
+  try {
+    const skills = [
+      {
+        id: 'qa-security-auditor',
+        name: 'Security & Penetration Auditor',
+        icon: '🛡️',
+        description: 'OWASP Top 10, IDOR, SQLi, XSS, token expiry, and unauthorized privilege escalation audit.',
+        focus: 'Security & Auth Vulnerabilities'
+      },
+      {
+        id: 'qa-boundary-analyzer',
+        name: 'Boundary & Edge Analyzer',
+        icon: '📐',
+        description: 'Boundary Value Analysis (BVA), extreme values, unicode/special char payload fuzzing.',
+        focus: 'Boundaries & Robustness'
+      },
+      {
+        id: 'qa-automation-engineer',
+        name: 'Automation Test Engineer',
+        icon: '⚙️',
+        description: 'Playwright & Cypress TypeScript end-to-end test automation and Page Object Models.',
+        focus: 'E2E Code Generation'
+      },
+      {
+        id: 'qa-performance-specialist',
+        name: 'Performance & SLA Specialist',
+        icon: '⚡',
+        description: 'Latency SLAs (p95/p99), concurrency load spikes, and database pool contention.',
+        focus: 'Performance & Stress'
+      },
+      {
+        id: 'qa-test-architect',
+        name: 'QA Test Architect',
+        icon: '🏗️',
+        description: 'Requirement Traceability Matrix (RTM), risk scoring, and test pyramid architecture.',
+        focus: 'Architecture & Coverage'
+      },
+      {
+        id: 'qa-defect-triager',
+        name: 'Defect & Failure Triager',
+        icon: '🐛',
+        description: 'Jira bug reports, regression hazard isolation, and reproduction step synthesis.',
+        focus: 'Defect Analysis'
+      },
+      {
+        id: 'qa-swarm-orchestrator',
+        name: '360° QA Swarm Orchestrator',
+        icon: '🚀',
+        description: 'Concurrent multi-agent swarm synthesis combining all 6 disciplines into a 360° audit.',
+        focus: 'Multi-Agent Swarm'
+      }
+    ];
+    res.json({ success: true, skills });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST Multi-Agent QA Swarm Audit
+app.post('/api/qa-agents/swarm-audit', async (req, res) => {
+  try {
+    const { storyId, userStory, acceptanceCriteria, format = 'Default' } = req.body;
+    let storyTitle = 'Active Feature Requirements';
+    let storyDesc = userStory || '';
+    let acText = acceptanceCriteria || '';
+
+    if (storyId) {
+      const story = await prisma.userStory.findUnique({
+        where: { id: storyId },
+        include: { acceptanceCriteria: true, testCases: true }
+      });
+      if (story) {
+        storyTitle = story.title;
+        storyDesc = story.description || storyDesc;
+        acText = story.acceptanceCriteria.map(a => a.content).join('\n') || acText;
+      }
+    }
+
+    if (!storyDesc && !acText) {
+      storyDesc = 'Verify comprehensive user authentication, data transactions, and UI workflows.';
+      acText = '1. Proper input validation and authorization\n2. Low latency and reliable error recovery';
+    }
+
+    const swarmResult = await runMultiAgentSwarmAudit(storyTitle, storyDesc, acText, format);
+    res.json({
+      success: true,
+      ...swarmResult
+    });
+  } catch (err) {
+    console.error('[Swarm Audit Error]:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

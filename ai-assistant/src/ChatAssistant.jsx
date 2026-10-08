@@ -4,6 +4,77 @@ import './ChatAssistant.css';
 const BACKEND_URL = 'http://localhost:5000/api';
 const generateChatId = () => 'CHAT-' + Date.now();
 
+const QA_PERSONAS = [
+  { id: 'general_qa', name: '💬 QA Copilot', badge: '💬 General', desc: 'General test design & verification' },
+  { id: 'test_architect', name: '🎯 Test Architect', badge: '🎯 Architect', desc: 'Strategy, risk analysis & traceability' },
+  { id: 'security_qa', name: '🛡️ Security Analyst', badge: '🛡️ Security', desc: 'OWASP Top 10, Auth & Vulnerabilities' },
+  { id: 'edge_boundary', name: '🔍 Boundary Explorer', badge: '🔍 Boundary', desc: 'BVA, edge limits & negative fuzzing' },
+  { id: 'performance_qa', name: '⚡ Performance Specialist', badge: '⚡ Performance', desc: 'Latency SLAs, concurrency & load limits' },
+  { id: 'automation_engineer', name: '🤖 Automation Engineer', badge: '🤖 Automation', desc: 'Playwright & Cypress scripts' },
+  { id: 'bug_triage', name: '🐞 Bug Triage Analyst', badge: '🐞 Bug Triage', desc: 'Defect logging & Jira ticket drafting' }
+];
+
+const QUICK_ACTION_PROMPTS = [
+  { icon: '🚀', label: '360° QA Swarm', prompt: '/swarm' },
+  { icon: '📝', label: 'Draft User Story', prompt: 'Create an Agile User Story with detailed Acceptance Criteria for: ' },
+  { icon: '📥', label: 'Fetch from ADO', prompt: 'fetch 10421 from ADO' },
+  { icon: '📥', label: 'Fetch from Jira', prompt: 'fetch PROJ-101 from Jira' },
+  { icon: '📥', label: 'Fetch from ALM', prompt: 'fetch 101 from ALM' },
+  { icon: '🔍', label: 'Find Boundary Cases', prompt: 'Analyze this feature and identify Boundary Value Analysis (BVA) limits, fuzzed test data, and edge case scenarios.' },
+  { icon: '🛡️', label: 'Audit Security Risks', prompt: 'Perform an OWASP Top 10 security and vulnerability risk audit for this user story (Auth, IDOR, Injection, Rate Limits).' },
+  { icon: '⚡', label: 'Stress & Load Limits', prompt: 'Suggest performance, stress, and peak concurrency test scenarios with specific latency and throughput targets.' },
+  { icon: '🤖', label: 'Playwright Code', prompt: 'Generate production-ready Playwright end-to-end automation test scripts for this feature using clean locators and assertions.' },
+  { icon: '🌲', label: 'Cypress Code', prompt: 'Generate production-grade Cypress test scripts for this feature.' },
+  { icon: '📋', label: 'Convert to BDD Gherkin', prompt: 'Convert this user story and acceptance criteria into structured BDD Gherkin Feature and Scenario Outlines.' },
+  { icon: '📊', label: 'Review AC Clarity', prompt: 'Audit the Acceptance Criteria for ambiguity, edge gaps, and missing validation rules. Suggest refined criteria.' },
+  { icon: '🐞', label: 'Draft Jira Bug Ticket', prompt: 'Draft a structured Jira bug report template for an edge-case validation failure in this feature.' }
+];
+
+function parseChatMessageContent(content) {
+  if (!content) return { displayText: '', embeddedTestCases: null, embeddedUserStory: null };
+  
+  let cleanText = content;
+  let embeddedTestCases = null;
+  let embeddedUserStory = null;
+
+  // 1. Check for ```json:userstory ... ```
+  const storyRegex = /```(?:json:userstory)\s*([\s\S]*?)```/i;
+  const storyMatch = content.match(storyRegex);
+  if (storyMatch) {
+    try {
+      const jsonStr = storyMatch[1].trim();
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && (parsed.userStory || parsed.title || parsed.acceptanceCriteria)) {
+        embeddedUserStory = parsed;
+        cleanText = cleanText.replace(storyMatch[0], '').trim();
+      }
+    } catch (_) {}
+  }
+
+  // 2. Check for ```json:testcases ... ``` or ```json ... ``` containing array of test cases
+  const testcasesRegex = /```(?:json:testcases|json)\s*([\s\S]*?)```/i;
+  const match = cleanText.match(testcasesRegex);
+  if (match) {
+    try {
+      const jsonStr = match[1].trim();
+      let parsed = JSON.parse(jsonStr);
+      if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.testCases)) {
+        parsed = parsed.testCases;
+      }
+      if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].title || parsed[0].testName || parsed[0].steps || parsed[0].description)) {
+        embeddedTestCases = parsed;
+        cleanText = cleanText.replace(match[0], '').trim();
+      } else if (parsed && !embeddedUserStory && (parsed.userStory || (parsed.title && parsed.acceptanceCriteria))) {
+        // Fallback: was a user story in generic json block
+        embeddedUserStory = parsed;
+        cleanText = cleanText.replace(match[0], '').trim();
+      }
+    } catch (_) {}
+  }
+  
+  return { displayText: cleanText, embeddedTestCases, embeddedUserStory };
+}
+
 export default function ChatAssistant() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState('generator'); // 'generator', 'repository', 'history'
@@ -22,11 +93,20 @@ export default function ChatAssistant() {
     try {
       const saved = localStorage.getItem('qatlas_currentUser');
       const userObj = saved ? JSON.parse(saved) : null;
-      return userObj ? userObj.id : 'default-user';
+      if (userObj && userObj.id) return userObj.id;
+      const savedUid = localStorage.getItem('qatlas_userId');
+      if (savedUid && savedUid.trim() && savedUid !== 'undefined' && savedUid !== 'null') return savedUid.trim();
+      return 'default-user';
     } catch (_) {
       return 'default-user';
     }
   });
+
+  useEffect(() => {
+    if (userId && userId !== 'undefined' && userId !== 'null') {
+      localStorage.setItem('qatlas_userId', userId);
+    }
+  }, [userId]);
 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -139,6 +219,9 @@ export default function ChatAssistant() {
   const [activeChatId, setActiveChatId] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [chatPersona, setChatPersona] = useState('general_qa');
+  const [importedChatMessages, setImportedChatMessages] = useState({});
+  const [savedChatStories, setSavedChatStories] = useState({});
   const messagesEndRef = useRef(null);
 
   // Test Cases State
@@ -195,6 +278,9 @@ export default function ChatAssistant() {
     if (lastLoadedChatIdRef.current === activeChatId && pastStories.length > 0 && activeStory) return;
 
     if (!activeChatId) {
+      if (lastLoadedChatIdRef.current && typeof lastLoadedChatIdRef.current === 'string' && lastLoadedChatIdRef.current.startsWith('story-')) {
+        return; // Retain directly loaded past story without clearing
+      }
       setUserStory('');
       setAcceptanceCriteria('');
       setUploadedFiles([]);
@@ -234,7 +320,6 @@ export default function ChatAssistant() {
       const res = await fetch(`${BACKEND_URL}/chats?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
       setChats(data);
-      // Auto-selecting the first chat session on load is disabled to ensure a fresh, clean slate upon page load/refresh.
     } catch (err) {
       console.error('Failed to fetch chats:', err);
     }
@@ -255,7 +340,8 @@ export default function ChatAssistant() {
 
   const createNewChat = () => {
     const newId = generateChatId();
-    setChats([{ id: newId, title: 'New QAutopilot Session', messages: [] }, ...chats]);
+    setChats(prev => [{ id: newId, title: 'New QAutopilot Session', messages: [] }, ...prev]);
+    lastLoadedChatIdRef.current = newId;
     setActiveChatId(newId);
     setSidebarOpen(false);
     setUserStory('');
@@ -276,6 +362,7 @@ export default function ChatAssistant() {
     setSelectedTestCase(null);
     setUploadedFiles([]);
     setDuplicateCount(0);
+    lastLoadedChatIdRef.current = null;
   };
 
   // --- Document File Upload ---
@@ -501,15 +588,15 @@ export default function ChatAssistant() {
   };
 
   // --- Send follow-up chat message ---
-  const handleSendChatMessage = async () => {
-    if (!chatInput.trim() || isTyping) return;
+  const handleSendChatMessage = async (explicitText = null) => {
+    const content = typeof explicitText === 'string' ? explicitText : chatInput;
+    if (!content || !content.trim() || isTyping) return;
     let currentChatId = activeChatId;
     if (!currentChatId) {
       currentChatId = generateChatId();
       setActiveChatId(currentChatId);
     }
 
-    const content = chatInput;
     const tempId = 'temp-' + Date.now();
     setChatInput('');
     setIsTyping(true);
@@ -538,6 +625,21 @@ export default function ChatAssistant() {
       };
       if (activeKey) headers['x-api-key'] = activeKey;
 
+      const storyCtx = activeStory ? {
+        id: activeStory.id,
+        title: activeStory.title,
+        description: activeStory.description || userStory,
+        acceptanceCriteria: activeStory.acceptanceCriteria || acceptanceCriteria,
+        testCasesCount: testCases.length,
+        format
+      } : (userStory.trim() || acceptanceCriteria.trim() ? {
+        title: userStory.substring(0, 40) || 'Active Requirement',
+        description: userStory,
+        acceptanceCriteria,
+        testCasesCount: testCases.length,
+        format
+      } : null);
+
       const res = await fetch(`${BACKEND_URL}/chats/${currentChatId}/messages`, {
         method: 'POST',
         headers,
@@ -545,7 +647,30 @@ export default function ChatAssistant() {
           role: 'user',
           content,
           title: content.substring(0, 25),
-          userId
+          userId,
+          persona: chatPersona,
+          storyContext: storyCtx,
+          adoCredentials: {
+            orgUrl: adoOrgUrl,
+            project: adoProject,
+            pat: adoPat,
+            includeSubTasks
+          },
+          jiraCredentials: {
+            jiraHost,
+            jiraEmail,
+            jiraToken,
+            jiraProject,
+            includeSubTasks
+          },
+          almCredentials: {
+            almUrl,
+            almDomain,
+            almProject,
+            almUsername,
+            almPassword,
+            includeSubTasks
+          }
         })
       });
 
@@ -578,6 +703,139 @@ export default function ChatAssistant() {
     }
   };
 
+  // --- Add test cases generated in chat directly to repository ---
+  const handleAddChatTestCases = async (cases, msgKey) => {
+    if (!cases || cases.length === 0) return;
+    let targetStoryId = activeStory?.id;
+
+    if (!targetStoryId) {
+      try {
+        const storyTitle = userStory ? userStory.substring(0, 40) : (activeChat?.title || 'Chat Generated Story');
+        const res = await fetch(`${BACKEND_URL}/user-stories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userStory: userStory || `User Story generated from QAutopilot chat session.`,
+            acceptanceCriteria: acceptanceCriteria || `1. Valid workflow.\n2. Negative flow handling.`,
+            userId,
+            format
+          })
+        });
+        if (res.ok) {
+          const storyData = await res.json();
+          targetStoryId = storyData.storyId;
+          setActiveStory(storyData.story);
+        }
+      } catch (e) {
+        console.error('Failed to auto-create story for chat import:', e);
+      }
+    }
+
+    if (!targetStoryId) {
+      alert('Please select or create an active User Story first.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/user-stories/${targetStoryId}/import-test-cases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testCases: cases })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTestCases(prev => [...prev, ...(data.testCases || [])]);
+        setImportedChatMessages(prev => ({ ...prev, [msgKey]: true }));
+        await fetchPastStories();
+        alert(`🎉 Added ${data.count || cases.length} test cases to Repository!`);
+      }
+    } catch (err) {
+      console.error('Failed to import chat test cases:', err);
+      alert('Failed to import test cases: ' + err.message);
+    }
+  };
+
+  // --- Load Chat User Story into Workspace Inputs ---
+  const handleSetChatStoryAsActive = (storyData, msgKey) => {
+    if (!storyData) return;
+    const storyDesc = storyData.userStory || '';
+    const acText = Array.isArray(storyData.acceptanceCriteria)
+      ? storyData.acceptanceCriteria.join('\n')
+      : (storyData.acceptanceCriteria || '');
+    setUserStory(storyDesc);
+    setAcceptanceCriteria(acText);
+    setSavedChatStories(prev => ({ ...prev, [msgKey]: 'loaded' }));
+    alert(`📌 Loaded "${storyData.title || 'User Story'}" into Workspace generator inputs!`);
+  };
+
+  // --- Save Chat User Story to Repository (Optionally generate tests) ---
+  const handleSaveChatStoryToRepo = async (storyData, msgKey, autoGenerateTests = false) => {
+    if (!storyData) return;
+    const storyDesc = storyData.userStory || '';
+    const acText = Array.isArray(storyData.acceptanceCriteria)
+      ? storyData.acceptanceCriteria.join('\n')
+      : (storyData.acceptanceCriteria || '');
+    const storyTitle = storyData.title || storyDesc.substring(0, 50) || 'New User Story';
+
+    setUserStory(storyDesc);
+    setAcceptanceCriteria(acText);
+
+    let currentChatId = activeChatId || generateChatId();
+    if (!activeChatId) setActiveChatId(currentChatId);
+
+    if (autoGenerateTests) setIsTyping(true);
+
+    try {
+      const activeKey = provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey;
+      const headers = { 'Content-Type': 'application/json', 'x-provider': provider };
+      if (activeKey) headers['x-api-key'] = activeKey;
+
+      const res = await fetch(`${BACKEND_URL}/user-stories`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: storyTitle,
+          userStory: storyDesc,
+          acceptanceCriteria: acText,
+          userId,
+          chatId: currentChatId,
+          format,
+          positiveCount, negativeCount, edgeCount, securityCount, performanceCount, customizeVolume,
+          createOnly: !autoGenerateTests,
+          generateTestCases: autoGenerateTests
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setActiveStory(data.story || { id: data.storyId, title: storyTitle, description: storyDesc, userId });
+
+        if (autoGenerateTests && data.testCases) {
+          setTestCases(data.testCases || []);
+          setDuplicateCount(data.duplicateCount || 0);
+          setSavedChatStories(prev => ({ ...prev, [msgKey]: 'generated' }));
+          await fetchChats();
+          await fetchPastStories();
+          setActiveTab('repository');
+          alert(`🎉 User Story saved and ${data.testCases.length} test cases generated!`);
+        } else {
+          setSavedChatStories(prev => ({ ...prev, [msgKey]: 'saved' }));
+          await fetchChats();
+          await fetchPastStories();
+          alert(`💾 User Story "${storyTitle}" saved to Repository!`);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to save story: ${errData.error || res.statusText}`);
+      }
+    } catch (err) {
+      console.error('Failed to save story from chat:', err);
+      alert('Failed to save story: ' + err.message);
+    } finally {
+      if (autoGenerateTests) setIsTyping(false);
+    }
+  };
 
   const deleteChat = async (e, chatId) => {
     e.stopPropagation();
@@ -640,14 +898,21 @@ export default function ChatAssistant() {
   // --- Retrieve past user story test cases ---
   const handleLoadPastStory = async (story) => {
     setActiveStory(story);
+    setUserStory(story.description || '');
+    const acText = story.acceptanceCriteria ? story.acceptanceCriteria.map(ac => ac.content).join('\n') : '';
+    setAcceptanceCriteria(acText);
     setDuplicateCount(0);
+    if (story.chatId) {
+      lastLoadedChatIdRef.current = story.chatId;
+      setActiveChatId(story.chatId);
+    } else {
+      lastLoadedChatIdRef.current = 'story-' + story.id;
+      setActiveChatId(null);
+    }
     try {
       const res = await fetch(`${BACKEND_URL}/user-stories/${story.id}/test-cases`);
       const data = await res.json();
       setTestCases(data);
-      if (story.chatId) {
-        setActiveChatId(story.chatId);
-      }
       setActiveTab('repository');
     } catch (err) {
       console.error(err);
@@ -3304,14 +3569,29 @@ _Reported via QAutopilot Execution Engine_`;
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '4px' }}>
+                <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '4px', flexWrap: 'wrap' }}>
                   <button
                     className="generate-btn"
                     onClick={handleGenerateTestCases}
                     disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim())}
-                    style={{ flex: 1, margin: 0 }}
+                    style={{ flex: '1 1 180px', margin: 0 }}
                   >
                     {isTyping ? 'Generating Test Cases...' : '✨ Generate Test Suite'}
+                  </button>
+                  <button
+                    className="generate-btn swarm-btn"
+                    onClick={() => {
+                      if (!userStory.trim() && !acceptanceCriteria.trim() && !activeStory) {
+                        alert('Please provide a User Story or Acceptance Criteria first.');
+                        return;
+                      }
+                      handleSendChatMessage('/swarm');
+                    }}
+                    disabled={isTyping || (!userStory.trim() && !acceptanceCriteria.trim() && !activeStory)}
+                    style={{ flex: '1 1 180px', margin: 0, background: 'linear-gradient(135deg, #6366f1, #ec4899)', border: 'none', color: '#ffffff', fontWeight: '700' }}
+                    title="Run concurrent Multi-Agent Swarm Audit across Security, Boundaries, Performance, Architecture, and Automation"
+                  >
+                    {isTyping ? 'Orchestrating Swarm...' : '🚀 360° QA Swarm Audit'}
                   </button>
                   <button
                     className="generate-btn reset"
@@ -3328,29 +3608,141 @@ _Reported via QAutopilot Execution Engine_`;
               {/* Chat Panel */}
               <div className="generator-chat-panel">
                 <div className="chat-header">
-                  <span>QAutopilot Discussion Log</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>
-                    {(provider === 'claude' ? claudeKey : provider === 'chatgpt' ? openaiKey : provider === 'copilot' ? copilotKey : geminiKey) 
-                      ? `⚡ ${provider === 'claude' ? 'Claude Opus 4.8' : provider === 'chatgpt' ? 'ChatGPT (GPT-5.5)' : provider === 'copilot' ? 'Microsoft Copilot' : 'Gemini 3.5 Flash'} Connected` 
-                      : 'Mock offline mode'}
-                  </span>
+                  <div className="chat-header-main">
+                    <span className="chat-header-title">QA Copilot Chat</span>
+                    <span className="chat-persona-badge">
+                      {QA_PERSONAS.find(p => p.id === chatPersona)?.badge || '💬 General'}
+                    </span>
+                  </div>
+                  <div className="chat-header-controls">
+                    <select
+                      className="chat-persona-select"
+                      value={chatPersona}
+                      onChange={(e) => setChatPersona(e.target.value)}
+                      title="Choose specialized QA Persona"
+                    >
+                      {QA_PERSONAS.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
                 <div className="chat-messages">
                   {activeChat.messages.length === 0 ? (
-                    <div className="empty-state" style={{ border: 'none', margin: 'auto' }}>
-                      <h3>Interactive QAutopilot Chat</h3>
-                      <p>Ask follow-up questions to refine, tweak, or add test cases. All discussion history is saved in SQLite.</p>
+                    <div className="empty-state" style={{ border: 'none', margin: 'auto', padding: '16px 8px' }}>
+                      <div style={{ fontSize: '28px', marginBottom: '8px' }}>🤖</div>
+                      <h3 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '4px' }}>Interactive QA Copilot</h3>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-sub)', maxWidth: '280px', margin: '0 auto 10px auto', lineHeight: '1.4' }}>
+                        Select a QA Persona above or click a quick prompt below to explore edge conditions, security audits, or automation code.
+                      </p>
+                      {activeStory && (
+                        <div style={{ padding: '6px 12px', background: 'var(--bg-sidebar)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--primary)', fontWeight: '600', display: 'inline-block' }}>
+                          📌 Working on: {activeStory.title.substring(0, 28)}...
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    activeChat.messages.map((msg, idx) => (
-                      <div key={idx} className={`message-row ${msg.role}`}>
-                        <div className={`message-bubble ${msg.role}`}>
-                          {msg.content.split('\n').map((line, i) => (
-                            <p key={i}>{line}</p>
-                          ))}
+                    activeChat.messages.map((msg, idx) => {
+                      const isAi = msg.role === 'ai';
+                      const { displayText, embeddedTestCases, embeddedUserStory } = isAi 
+                        ? parseChatMessageContent(msg.content) 
+                        : { displayText: msg.content, embeddedTestCases: null, embeddedUserStory: null };
+                      const msgKey = msg.id || `msg-${idx}`;
+                      const isImported = importedChatMessages[msgKey];
+                      const storyStatus = savedChatStories[msgKey]; // 'saved' | 'loaded' | 'generated'
+
+                      return (
+                        <div key={idx} className={`message-row ${msg.role}`}>
+                          <div className={`message-bubble ${msg.role}`}>
+                            {displayText.split('\n').map((line, i) => (
+                              <p key={i}>{line}</p>
+                            ))}
+
+                            {/* Embedded In-Chat User Story Card */}
+                            {embeddedUserStory && (
+                              <div className="in-chat-story-card">
+                                <div className="in-chat-story-header">
+                                  <div className="story-title-group">
+                                    <span className="story-badge">📝 Story Draft</span>
+                                    <h4 className="story-card-title">{embeddedUserStory.title || 'Agile User Story'}</h4>
+                                  </div>
+                                </div>
+                                
+                                <div className="story-preview-body">
+                                  {embeddedUserStory.userStory && (
+                                    <div className="story-preview-text">
+                                      <strong>User Story:</strong>
+                                      <p>{embeddedUserStory.userStory}</p>
+                                    </div>
+                                  )}
+                                  {embeddedUserStory.acceptanceCriteria && (
+                                    <div className="story-preview-acs">
+                                      <strong>Acceptance Criteria:</strong>
+                                      {Array.isArray(embeddedUserStory.acceptanceCriteria) ? (
+                                        <ul>
+                                          {embeddedUserStory.acceptanceCriteria.map((ac, acIdx) => (
+                                            <li key={acIdx}>{ac}</li>
+                                          ))}
+                                        </ul>
+                                      ) : (
+                                        <p>{embeddedUserStory.acceptanceCriteria}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="in-chat-story-actions">
+                                  <button
+                                    className={`btn-story-action primary ${storyStatus === 'saved' || storyStatus === 'generated' ? 'done' : ''}`}
+                                    onClick={() => handleSaveChatStoryToRepo(embeddedUserStory, msgKey, false)}
+                                    disabled={storyStatus === 'saved' || storyStatus === 'generated'}
+                                    title="Save this user story directly to the repository database"
+                                  >
+                                    {storyStatus === 'saved' ? '✅ Saved in Repo' : '💾 Save to Repository'}
+                                  </button>
+                                  <button
+                                    className={`btn-story-action secondary ${storyStatus === 'loaded' ? 'active' : ''}`}
+                                    onClick={() => handleSetChatStoryAsActive(embeddedUserStory, msgKey)}
+                                    title="Load this user story and acceptance criteria into workspace generator inputs"
+                                  >
+                                    {storyStatus === 'loaded' ? '📌 Loaded in Workspace' : '📌 Load into Workspace'}
+                                  </button>
+                                  <button
+                                    className={`btn-story-action accent ${storyStatus === 'generated' ? 'done' : ''}`}
+                                    onClick={() => handleSaveChatStoryToRepo(embeddedUserStory, msgKey, true)}
+                                    disabled={storyStatus === 'generated'}
+                                    title="Save story and immediately generate all test cases"
+                                  >
+                                    {storyStatus === 'generated' ? '✨ Generated Tests' : '✨ Save & Generate Tests'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Embedded In-Chat Test Cases Banner */}
+                            {embeddedTestCases && embeddedTestCases.length > 0 && (
+                              <div className="in-chat-action-banner">
+                                <div className="in-chat-banner-info">
+                                  <span className="banner-icon">⚡</span>
+                                  <span className="banner-text">
+                                    <strong>{embeddedTestCases.length} Test Cases</strong> suggested by AI
+                                  </span>
+                                </div>
+                                <button
+                                  className={`btn-add-chat-suite ${isImported ? 'added' : ''}`}
+                                  onClick={() => handleAddChatTestCases(embeddedTestCases, msgKey)}
+                                  disabled={isImported}
+                                  title="Add these test cases directly to the active test suite"
+                                >
+                                  {isImported ? '✅ Added to Repository' : '➕ Add to Repository'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                   {isTyping && (
                     <div className="message-row ai">
@@ -3361,16 +3753,35 @@ _Reported via QAutopilot Execution Engine_`;
                   )}
                   <div ref={messagesEndRef} />
                 </div>
+
+                {/* Quick Action Chips Toolbar */}
+                <div className="quick-actions-toolbar">
+                  <div className="quick-actions-scroll">
+                    {QUICK_ACTION_PROMPTS.map((chip, cIdx) => (
+                      <button
+                        key={cIdx}
+                        className="quick-action-chip"
+                        onClick={() => handleSendChatMessage(chip.prompt)}
+                        disabled={isTyping}
+                        title={chip.prompt}
+                      >
+                        <span className="chip-icon">{chip.icon}</span>
+                        <span className="chip-label">{chip.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="chat-input-area">
                   <input
                     type="text"
-                    placeholder="Tweak output, ask follow-up questions..."
+                    placeholder={`Ask ${QA_PERSONAS.find(p => p.id === chatPersona)?.name || 'QA Copilot'}...`}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
                     disabled={isTyping}
                   />
-                  <button onClick={handleSendChatMessage} disabled={!chatInput.trim() || isTyping}>
+                  <button onClick={() => handleSendChatMessage()} disabled={!chatInput.trim() || isTyping}>
                     Send
                   </button>
                 </div>
@@ -3777,8 +4188,8 @@ _Reported via QAutopilot Execution Engine_`;
                             );
                           } else if (currentView === 'playwright') {
                             return (
-                              <div className="tc-details playwright-details">
-                                <div className="detail-row">
+                              <div className="tc-details playwright-details" style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
+                                <div className="detail-row" style={{ maxWidth: '100%', minWidth: 0 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <span className="detail-label">Playwright Automation Code</span>
                                     <button className="copy-bdd-btn" onClick={(e) => {
@@ -3791,7 +4202,7 @@ _Reported via QAutopilot Execution Engine_`;
                                       📋 Copy Code
                                     </button>
                                   </div>
-                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: '1.4' }}>
                                     {convertToPlaywright(tc)}
                                   </pre>
                                 </div>
@@ -3799,8 +4210,8 @@ _Reported via QAutopilot Execution Engine_`;
                             );
                           } else if (currentView === 'cypress') {
                             return (
-                              <div className="tc-details cypress-details">
-                                <div className="detail-row">
+                              <div className="tc-details cypress-details" style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
+                                <div className="detail-row" style={{ maxWidth: '100%', minWidth: 0 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <span className="detail-label">Cypress Automation Code</span>
                                     <button className="copy-bdd-btn" onClick={(e) => {
@@ -3813,7 +4224,7 @@ _Reported via QAutopilot Execution Engine_`;
                                       📋 Copy Code
                                     </button>
                                   </div>
-                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: '1.4' }}>
                                     {convertToCypress(tc)}
                                   </pre>
                                 </div>
@@ -3821,8 +4232,8 @@ _Reported via QAutopilot Execution Engine_`;
                             );
                           } else if (currentView === 'playwright_pom') {
                             return (
-                              <div className="tc-details playwright-details">
-                                <div className="detail-row">
+                              <div className="tc-details playwright-details" style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
+                                <div className="detail-row" style={{ maxWidth: '100%', minWidth: 0 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <span className="detail-label">Playwright POM Spec & Page Class</span>
                                     <button className="copy-bdd-btn" onClick={(e) => {
@@ -3835,7 +4246,7 @@ _Reported via QAutopilot Execution Engine_`;
                                       📋 Copy POM
                                     </button>
                                   </div>
-                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: '1.4' }}>
                                     {`// ===== PAGE OBJECT CLASS =====\n${generatePOMTemplate(tc)}\n\n// ===== SPEC FILE =====\n${convertToPlaywrightPOM(tc)}`}
                                   </pre>
                                 </div>
@@ -3843,8 +4254,8 @@ _Reported via QAutopilot Execution Engine_`;
                             );
                           } else if (currentView === 'cypress_pom') {
                             return (
-                              <div className="tc-details cypress-details">
-                                <div className="detail-row">
+                              <div className="tc-details cypress-details" style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
+                                <div className="detail-row" style={{ maxWidth: '100%', minWidth: 0 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <span className="detail-label">Cypress POM Spec & Page Class</span>
                                     <button className="copy-bdd-btn" onClick={(e) => {
@@ -3857,7 +4268,7 @@ _Reported via QAutopilot Execution Engine_`;
                                       📋 Copy POM
                                     </button>
                                   </div>
-                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: '1.4' }}>
                                     {convertToCypressPOM(tc)}
                                   </pre>
                                 </div>
@@ -3865,8 +4276,8 @@ _Reported via QAutopilot Execution Engine_`;
                             );
                           } else if (currentView === 'json_payload') {
                             return (
-                              <div className="tc-details json-details">
-                                <div className="detail-row">
+                              <div className="tc-details json-details" style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
+                                <div className="detail-row" style={{ maxWidth: '100%', minWidth: 0 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <span className="detail-label">Mock API Request Payload</span>
                                     <button className="copy-bdd-btn" onClick={(e) => {
@@ -3879,7 +4290,7 @@ _Reported via QAutopilot Execution Engine_`;
                                       📋 Copy Payload
                                     </button>
                                   </div>
-                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.4' }}>
+                                  <pre className="gherkin-text" style={{ margin: 0, padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--text-main)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: '1.4' }}>
                                     {convertToJSONPayload(tc)}
                                   </pre>
                                 </div>

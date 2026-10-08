@@ -1,5 +1,6 @@
 # Exclude other unrelated scratch projects
 /form-builder/
+/finance-assistant-ui/
 /qa-presentation/
 /qa-workflow-presentation/
 /run-tracker/
