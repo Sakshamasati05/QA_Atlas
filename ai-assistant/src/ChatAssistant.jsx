@@ -14,22 +14,6 @@ const QA_PERSONAS = [
   { id: 'bug_triage', name: '🐞 Bug Triage Analyst', badge: '🐞 Bug Triage', desc: 'Defect logging & Jira ticket drafting' }
 ];
 
-const QUICK_ACTION_PROMPTS = [
-  { icon: '🚀', label: '360° QA Swarm', prompt: '/swarm' },
-  { icon: '📝', label: 'Draft User Story', prompt: 'Create an Agile User Story with detailed Acceptance Criteria for: ' },
-  { icon: '📥', label: 'Fetch from ADO', prompt: 'fetch 10421 from ADO' },
-  { icon: '📥', label: 'Fetch from Jira', prompt: 'fetch PROJ-101 from Jira' },
-  { icon: '📥', label: 'Fetch from ALM', prompt: 'fetch 101 from ALM' },
-  { icon: '🔍', label: 'Find Boundary Cases', prompt: 'Analyze this feature and identify Boundary Value Analysis (BVA) limits, fuzzed test data, and edge case scenarios.' },
-  { icon: '🛡️', label: 'Audit Security Risks', prompt: 'Perform an OWASP Top 10 security and vulnerability risk audit for this user story (Auth, IDOR, Injection, Rate Limits).' },
-  { icon: '⚡', label: 'Stress & Load Limits', prompt: 'Suggest performance, stress, and peak concurrency test scenarios with specific latency and throughput targets.' },
-  { icon: '🤖', label: 'Playwright Code', prompt: 'Generate production-ready Playwright end-to-end automation test scripts for this feature using clean locators and assertions.' },
-  { icon: '🌲', label: 'Cypress Code', prompt: 'Generate production-grade Cypress test scripts for this feature.' },
-  { icon: '📋', label: 'Convert to BDD Gherkin', prompt: 'Convert this user story and acceptance criteria into structured BDD Gherkin Feature and Scenario Outlines.' },
-  { icon: '📊', label: 'Review AC Clarity', prompt: 'Audit the Acceptance Criteria for ambiguity, edge gaps, and missing validation rules. Suggest refined criteria.' },
-  { icon: '🐞', label: 'Draft Jira Bug Ticket', prompt: 'Draft a structured Jira bug report template for an edge-case validation failure in this feature.' }
-];
-
 function parseChatMessageContent(content) {
   if (!content) return { displayText: '', embeddedTestCases: null, embeddedUserStory: null };
   
@@ -3752,24 +3736,6 @@ _Reported via QAutopilot Execution Engine_`;
                     </div>
                   )}
                   <div ref={messagesEndRef} />
-                </div>
-
-                {/* Quick Action Chips Toolbar */}
-                <div className="quick-actions-toolbar">
-                  <div className="quick-actions-scroll">
-                    {QUICK_ACTION_PROMPTS.map((chip, cIdx) => (
-                      <button
-                        key={cIdx}
-                        className="quick-action-chip"
-                        onClick={() => handleSendChatMessage(chip.prompt)}
-                        disabled={isTyping}
-                        title={chip.prompt}
-                      >
-                        <span className="chip-icon">{chip.icon}</span>
-                        <span className="chip-label">{chip.label}</span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="chat-input-area">
